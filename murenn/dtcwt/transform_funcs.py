@@ -31,17 +31,15 @@ class FWD_J1(torch.autograd.Function):
         ctx.save_for_backward(h0_rep, h1_rep)
 
         # Apply low-pass filtering
-        h0_padding = h0.shape[-1] // 2
         lo = torch.nn.functional.conv1d(
-            x, h0_rep, padding=h0_padding, groups=ch)
+        x, h0_rep, padding='same', groups=ch)
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
             hi = x.new_zeros([])
         else:
-            h1_padding = h1.shape[-1] // 2
             hi = torch.nn.functional.conv1d(
-                x, h1_rep, padding=h1_padding, groups=ch)
+            x, h1_rep, padding='same', groups=ch)
 
         # Return low-pass (x_phi) and high-pass (x_psi) pair
         return lo, hi
@@ -84,25 +82,23 @@ class FWD_J2PLUS(torch.autograd.Function):
         ctx.save_for_backward(h0a_rep, h1a_rep, h0b_rep, h1b_rep)
 
         # Apply low-pass filtering on trees a (real) and b (imaginary).
-        h0a_padding = h0a.shape[-1] // 2
-        h0b_padding = h0b.shape[-1] // 2
+
         lo_a = torch.nn.functional.conv1d(
-            x_a, h0a_rep, padding=h0a_padding, groups=ch)
+            x_a, h0a_rep, padding='same', groups=ch)
+    
         lo_b = torch.nn.functional.conv1d(
-            x_b, h0b_rep, padding=h0b_padding, groups=ch)
+            x_b, h0b_rep, padding='same', groups=ch)
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
             bp = x_a.new_zeros([])
         else:
-            h1a_padding = h1a.shape[-1] // 2
-            h1b_padding = h1b.shape[-1] // 2
             bp_a = torch.nn.functional.conv1d(
-                lo_a, h1a_rep, padding=h1a_padding, groups=ch
+                lo_a, h1a_rep, padding='same', groups=ch
             )
             bp_b = torch.nn.functional.conv1d(
-                lo_b, h1b_rep, padding=h1b_padding, groups=ch
-            )
+                lo_b, h1b_rep, padding='same', groups=ch
+                )
             bp = np.sqrt(1/2) * (bp_a + 1j * bp_b)
 
         # Subsample
@@ -189,8 +185,9 @@ class INV_J2PLUS(torch.autograd.Function):
         # Apply dual low-pass filtering on trees a (real) and b (imaginary)
         g0a_padding = g0a.shape[-1] // 2
         g0b_padding = g0b.shape[-1] // 2
+
         x0a = torch.nn.functional.conv1d(lo_a, g0a_rep, padding=g0a_padding)
-        x0b = torch.nn.functional.conv1d(lo_b, g0b_rep, padding=g0a_padding)
+        x0b = torch.nn.functional.conv1d(lo_b, g0b_rep, padding=g0b_padding)
 
         # Upsample by inserting zeros every other sample
         x0a_zeros = torch.zeros_like(x0a)
