@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from murenn.dtcwt.utils import pad_
 
 
 class FWD_J1(torch.autograd.Function):
@@ -8,7 +9,7 @@ class FWD_J1(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, x, h0, h1, skip_hps):
+    def forward(ctx, x, h0, h1, skip_hps, padding_mode):
         """
         Forward dual-tree complex wavelet transform at level 1.
 
@@ -18,6 +19,7 @@ class FWD_J1(torch.autograd.Function):
             h0 is the low-pass analysis filter
             h1 is the high-pass analysis filter
             skip_hps: if True, skip high-pass filtering
+            padding_mode: 'constant', 'reflect', 'replicate' or 'circular'
 
         Returns:
             lo: low-pass output (-pi/4 to pi/4)
@@ -32,17 +34,17 @@ class FWD_J1(torch.autograd.Function):
 
         # Apply low-pass filtering
         lo = torch.nn.functional.conv1d(
-        x, h0_rep, padding='same', groups=ch)
+        pad_(x, h0, padding_mode), h0_rep, groups=ch)
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
             hi = x.new_zeros([])
         else:
             hi = torch.nn.functional.conv1d(
-            x, h1_rep, padding='same', groups=ch)
+            pad_(x, h1, padding_mode), h1_rep, groups=ch)
 
         # Return low-pass (x_phi) and high-pass (x_psi) pair
-        return lo, hi
+        return lo, hi[:,:,::2] + 1j * hi[:,:,1::2]
 
 
 class FWD_J2PLUS(torch.autograd.Function):
@@ -54,61 +56,66 @@ class FWD_J2PLUS(torch.autograd.Function):
     high-pass output of tree b."""
 
     @staticmethod
-    def forward(ctx, x_a, x_b, h0a, h1a, h0b, h1b, skip_hps):
+    def forward(ctx, x_phi, h0a, h1a, h0b, h1b, skip_hps, padding_mode, normalise):
         """
         Forward dual-tree complex wavelet transform at levels 2 and coarser.
 
         Args:
             ctx: DTCWTForward object
-            x_a: input Tensor of tree a
-            x_b: input Tensor of tree b
+            x_phi: input Tensor
             h0a: low-pass filter of tree a (real part)
             h1a: high-pass filter of tree a (real part)
             h0b: low-pass filter of tree b (imaginary part)
             h1b: high-pass filter of tree b (imaginary part)
             skip_hps: if True, skip high-pass filtering
+            padding_mode: 'constant'(zero padding), 'reflect', 'replicate' or 'circular'
+            normalise: bool, normalise or not
 
         Returns:
-            lo_a: low-pass output from tree a
-            lo_b: low-pass output from tree b
+            lo: low-pass output from both trees
             bp: band-pass output from both trees."""
 
         # Replicate filters along the channel dimension
-        b, ch, T = x_a.shape
+        b, ch, T = x_phi.shape
         h0a_rep = h0a.repeat(ch, 1, 1)
         h1a_rep = h1a.repeat(ch, 1, 1)
         h0b_rep = h0b.repeat(ch, 1, 1)
         h1b_rep = h1b.repeat(ch, 1, 1)
         ctx.save_for_backward(h0a_rep, h1a_rep, h0b_rep, h1b_rep)
 
-        # Apply low-pass filtering on trees a (real) and b (imaginary).
+        # Input tensor for tree a and tree b. The first two samples are removed so
+        # that the length of 'lo' will be the length of 'x_phi' divided by 2.
+        x_phi = pad_(x_phi, h0a, padding_mode, False)
+        x_a = x_phi[:,:,2::2]
+        x_b = x_phi[:,:,3::2]
 
+        # Apply low-pass filtering on trees a (real) and b (imaginary).
         lo_a = torch.nn.functional.conv1d(
-            x_a, h0a_rep, padding='same', groups=ch)
-    
+            x_a, h0a_rep, stride=2, groups=ch)    
         lo_b = torch.nn.functional.conv1d(
-            x_b, h0b_rep, padding='same', groups=ch)
+            x_b, h0b_rep, stride=2, groups=ch)
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
             bp = x_a.new_zeros([])
         else:
             bp_a = torch.nn.functional.conv1d(
-                lo_a, h1a_rep, padding='same', groups=ch
+                x_a, h1a_rep, stride=2, groups=ch
             )
             bp_b = torch.nn.functional.conv1d(
-                lo_b, h1b_rep, padding='same', groups=ch
+                x_b, h1b_rep, stride=2, groups=ch
                 )
-            bp = np.sqrt(1/2) * (bp_a + 1j * bp_b)
+            bp = bp_b + 1j * bp_a
+        
+        # 'lo' the low-pass output such that lo[2t]=lo_a[t] and lo[2t+1]=lo_b[t]
+        lo = torch.stack((lo_a, lo_b), dim=-1).view(b, ch, T//2)
 
-        # Subsample
-        lo_a = np.sqrt(1/2) * lo_a[:, :, ::2]
-        lo_b = np.sqrt(1/2) * lo_b[:, :, ::2]
-
-        # Return low-pass output from both trees separately, and band-pass
-        # output in conjunction:
+        # Return low-pass output, and band-pass output in conjunction:
         # real part for tree a and imaginary part for tree b.
-        return lo_a, lo_b, bp
+        if normalise:
+            return np.sqrt(1/2) * lo, np.sqrt(1/2) * bp
+        else:
+            return lo, bp
 
 
 class INV_J1(torch.autograd.Function):
