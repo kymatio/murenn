@@ -43,7 +43,7 @@ class DTCWTForward(torch.nn.Module):
         include_scale=False,
         alternate_gh=True,
         padding_mode='zeros',
-        normalize='true'
+        normalize=True
     ):
         # Instantiate PyTorch NN Module
         super().__init__()

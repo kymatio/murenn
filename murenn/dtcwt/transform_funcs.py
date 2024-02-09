@@ -56,7 +56,7 @@ class FWD_J2PLUS(torch.autograd.Function):
     high-pass output of tree b."""
 
     @staticmethod
-    def forward(ctx, x_phi, h0a, h1a, h0b, h1b, skip_hps, padding_mode, normalise):
+    def forward(ctx, x_phi, h0a, h1a, h0b, h1b, skip_hps, padding_mode, normalize):
         """
         Forward dual-tree complex wavelet transform at levels 2 and coarser.
 
@@ -112,7 +112,7 @@ class FWD_J2PLUS(torch.autograd.Function):
 
         # Return low-pass output, and band-pass output in conjunction:
         # real part for tree a and imaginary part for tree b.
-        if normalise:
+        if normalize:
             return np.sqrt(1/2) * lo, np.sqrt(1/2) * bp
         else:
             return lo, bp
