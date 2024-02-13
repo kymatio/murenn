@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 
 
@@ -9,27 +8,17 @@ def reflect(x, minx, maxx):
     and *maxx*.  If *x* contains integers and *minx* and *maxx* are (integers +
     0.5), the ramps will have repeated max and min samples.
 
-    .. codeauthor:: Rich Wareham <rjw57@cantab.net>, Aug 2013
-    .. codeauthor:: Nick Kingsbury, Cambridge University, January 1999.
+    .. codeauthor:: Xiran Zhang <xiran.zhang@ls2n.fr>, Feb 2024
+    .. adapted from:: Rich Wareham <rjw57@cantab.net>, Aug 2013
+                      Nick Kingsbury, Cambridge University, January 1999.
 
     """
-    x = np.asanyarray(x)
     rng = maxx - minx
     rng_by_2 = 2 * rng
-    mod = np.fmod(x - minx, rng_by_2)
-    normed_mod = np.where(mod < 0, mod + rng_by_2, mod)
-    out = np.where(normed_mod >= rng, rng_by_2 - normed_mod, normed_mod) + minx
-    return np.array(out, dtype=x.dtype)
-
-def symm_pad(l, m):
-    """ Creates indices for symmetric padding. Works for 1-D.
-
-    Inptus:
-        l (int): size of input
-        m (int): size of filter
-    """
-    xe = reflect(np.arange(-m, l+m, dtype='int32'), -0.5, l-0.5)
-    return xe
+    mod = torch.remainder(x - minx, rng_by_2)
+    normed_mod = torch.where(mod < 0, mod + rng_by_2, mod)
+    out = torch.where(normed_mod >= rng, rng_by_2 - normed_mod, normed_mod) + minx
+    return out.int()
 
 def pad_(x, h, padding_mode, same_pad = True):
     """
@@ -42,22 +31,14 @@ def pad_(x, h, padding_mode, same_pad = True):
         padding_mode: 'constant', 'reflect', 'replicate' or 'circular'
         same_pad: if False, full padding will be applied
     """
-    if padding_mode == 'reflect':
-        if same_pad:
-            # Only works for the odd length filters. If the filter is of even length,
-            # this will cause the length of output added by 1.
-            assert h.shape[-1]%2 == 1
-            xe = symm_pad(x.shape[-1],h.shape[-1]//2)
-        else:
-            xe = symm_pad(x.shape[-1],h.shape[-1])
-        out = x[:,:,xe]
+    padding_total = h.shape[-1]-1
+    padding_left = padding_total//2 if same_pad else h.shape[-1]
+    padding_right = padding_total - padding_left if same_pad else h.shape[-1]
 
-    else:
-        if same_pad:
-            padding_total = h.shape[-1]-1
-            padding_left = padding_total//2
-            padding_right = padding_total - padding_left
-            out = torch.nn.functional.pad(x, (padding_left, padding_right), padding_mode)
-        else:
-            out = torch.nn.functional.pad(x, (h.shape[-1], h.shape[-1]), padding_mode)
+    if padding_mode == 'reflect':
+        l = x.shape[-1]
+        xe = reflect(torch.arange(-padding_left, l+padding_right, dtype=torch.int32), -0.5, l-0.5)
+        out = x[:,:,xe]
+    else: 
+        out = torch.nn.functional.pad(x, (padding_left, padding_right), padding_mode)
     return out
