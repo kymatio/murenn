@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from murenn.dtcwt.utils import pad_
+from murenn.dtcwt.lowlevel import colifilt
 
 
 class FWD_J1(torch.autograd.Function):
@@ -45,6 +46,7 @@ class FWD_J1(torch.autograd.Function):
 
         # Return low-pass (x_phi) and high-pass (x_psi) pair
         return lo, hi[:,:,::2] + 1j * hi[:,:,1::2]
+    # TBD: backward function !!!
 
 
 class FWD_J2PLUS(torch.autograd.Function):
@@ -116,6 +118,8 @@ class FWD_J2PLUS(torch.autograd.Function):
             return np.sqrt(1/2) * lo, np.sqrt(1/2) * bp
         else:
             return lo, bp
+        
+    # TBD: backward function !!!
 
 
 class INV_J1(torch.autograd.Function):
@@ -124,7 +128,7 @@ class INV_J1(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, lo, hi, g0, g1):
+    def forward(ctx, lo, hi, g0, g1, padding_mode, normalize):
         """
         Inverse dual-tree complex wavelet transform at level 1.
 
@@ -145,12 +149,11 @@ class INV_J1(torch.autograd.Function):
         ctx.save_for_backward(g0_rep, g1_rep)
 
         # Apply dual low-pass filtering
-        g0_padding = g0.shape[-1] // 2
-        x0 = torch.nn.functional.conv1d(lo, g0_rep, padding=g0_padding)
+        x0 = torch.nn.functional.conv1d(pad_(lo, g0, padding_mode), g0_rep)
 
         # Apply dual high-pass filtering
-        g1_padding = g1.shape[-1] // 2
-        x1 = torch.nn.functional.conv1d(hi, g1_rep, padding=g1_padding)
+        hi = torch.stack((hi.real, hi.imag), dim=-1).view(b, ch, T)
+        x1 = torch.nn.functional.conv1d(pad_(hi, g1, padding_mode), g1_rep)
 
         # Mix low-pass and high-pass contributions
         x = x0 + x1
@@ -163,14 +166,13 @@ class INV_J2PLUS(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, lo_a, lo_b, bp, g0a, g1a, g0b, g1b):
+    def forward(ctx, lo, bp, g0a, g1a, g0b, g1b, padding_mode, normalize):
         """
         Inverse dual-tree complex wavelet transform at levels 2 and coarser.
 
         Args:
             ctx is the DTCWTInverse object
-            lo_a is the low-pass output from tree a (real part)
-            lo_b is the low-pass output from tree b (imaginary part)
+            lo is the low-pass output from both trees
             bp is the band-pass output (complex-valued)
             g0a is the dual low-pass filter of tree a (real part)
             g1a is the dual high-pass filter of tree a (real part)
@@ -182,35 +184,14 @@ class INV_J2PLUS(torch.autograd.Function):
             x_b: reconstructed 1-D signal from tree a (imaginary part)
         """
         # Replicate filters along the channel dimension
-        b, ch, T = lo_a.shape
+        b, ch, T = lo.shape
         g0a_rep = g0a.repeat(ch, 1, 1)
         g1a_rep = g1a.repeat(ch, 1, 1)
         g0b_rep = g0b.repeat(ch, 1, 1)
         g1b_rep = g1b.repeat(ch, 1, 1)
         ctx.save_for_backward(g0a_rep, g1a_rep, g0b_rep, g1b_rep)
 
-        # Apply dual low-pass filtering on trees a (real) and b (imaginary)
-        g0a_padding = g0a.shape[-1] // 2
-        g0b_padding = g0b.shape[-1] // 2
+        bp = torch.stack((bp.imag, bp.real), dim=-1).view(b, ch, T)
+        lo = colifilt(lo, g0a_rep, g0b_rep, padding_mode) + colifilt(bp, g1a_rep, g1b_rep, padding_mode)
 
-        x0a = torch.nn.functional.conv1d(lo_a, g0a_rep, padding=g0a_padding)
-        x0b = torch.nn.functional.conv1d(lo_b, g0b_rep, padding=g0b_padding)
-
-        # Upsample by inserting zeros every other sample
-        x0a_zeros = torch.zeros_like(x0a)
-        x0a_up = torch.stack((x0a, x0a_zeros), -1).reshape(b, ch, 2 * T)
-        x0b_zeros = torch.zeros_like(x0b)
-        x0b_up = torch.stack((x0b, x0b_zeros), -1).reshape(b, ch, 2 * T)
-
-        # Apply dual high-pass filtering on band-pass input (complex-valued)
-        g1a_padding = g1a.shape[-1] // 2
-        g1b_padding = g1b.shape[-1] // 2
-        bp_a = torch.real(bp)
-        bp_b = torch.imag(bp)
-        x1a = torch.nn.functional.conv1d(bp_a, g1a_rep, padding=g1a_padding)
-        x1b = torch.nn.functional.conv1d(bp_b, g1b_rep, padding=g1b_padding)
-
-        # Mix low-pass and high-pass contributions
-        x_a = x0a + x1a
-        x_b = x0b + x1b
-        return x_a, x_b
+        return lo

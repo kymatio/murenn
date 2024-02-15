@@ -2,8 +2,8 @@ import numpy as np
 import pytorch_wavelets as pytw
 import torch.nn
 
-from .lowlevel import prep_filt
-from .transform_funcs import FWD_J1, FWD_J2PLUS
+from murenn.dtcwt.lowlevel import prep_filt
+from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
 
 
 class DTCWTForward(torch.nn.Module):
@@ -168,3 +168,100 @@ class DTCWTForward(torch.nn.Module):
             return x_phis, x_psis
         else:
             return x_phi, x_psis
+
+class DTCWTInverse(torch.nn.Module):
+    def __init__(
+        self,
+        level1="near_sym_a",
+        qshift="qshift_a",
+        J=8,
+        skip_hps=False,
+        include_scale=False,
+        alternate_gh=True,
+        padding_mode='zeros',
+        normalize=True
+    ):
+        # Instantiate PyTorch NN Module
+        super().__init__()
+
+        # Store metadata
+        self.level1 = level1
+        self.qshift = qshift
+        self.J = J
+        self.alternate_gh = alternate_gh
+        if padding_mode == 'zeros':
+            self.padding_mode = 'constant'
+        else:
+            self.padding_mode = padding_mode
+        self.normalize = normalize
+
+        # Load first-level biorthogonal wavelet filters from disk.
+        # h0o is the low-pass filter.
+        # h1o is the high-pass filter.
+        _, g0o, _, g1o = pytw.dtcwt.coeffs._load_from_file(
+            level1, ("h0o", "g0o", "h1o", "g1o")
+        )
+        self.register_buffer("g0o", prep_filt(g0o))
+        self.register_buffer("g1o", prep_filt(g1o))
+
+        # Load higher-level quarter-shift wavelet filters from disk.
+        # h0a is the low-pass filter from tree a (real part).
+        # h0b is the low-pass filter from tree b (imaginary part).
+        # g0a is the low-pass dual filter from tree a (real part).
+        # g0b is the low-pass dual filter from tree b (imaginary part).
+        # h1a is the high-pass filter from tree a (real part).
+        # h1b is the high-pass filter from tree b (imaginary part).
+        # g1a is the high-pass dual filter from tree a (real part).
+        # g1b is the high-pass dual filter from tree b (imaginary part).
+        h0a, h0b, g0a, g0b, h1a, h1b, g1a, g1b = pytw.dtcwt.coeffs._load_from_file(
+            qshift, ("h0a", "h0b", "g0a", "g0b", "h1a", "h1b", "g1a", "g1b")
+        )
+        self.register_buffer("h0a", prep_filt(h0a))
+        self.register_buffer("h0b", prep_filt(h0b))
+        self.register_buffer("g0a", prep_filt(g0a))
+        self.register_buffer("g0b", prep_filt(g0b))
+        self.register_buffer("h1a", prep_filt(h1a))
+        self.register_buffer("h1b", prep_filt(h1b))
+        self.register_buffer("g1a", prep_filt(g1a))
+        self.register_buffer("g1b", prep_filt(g1b))
+
+        # Parse the "skip_hps" argument for skipping finest scales.
+        if isinstance(skip_hps, (list, tuple, np.ndarray)):
+            self.skip_hps = skip_hps
+        else:
+            self.skip_hps = [skip_hps,] * self.J
+
+        # Parse the "include_scale" argument for including other low-pass
+        # outputs in addition to the coarsest scale.
+        if isinstance(include_scale, (list, tuple, np.ndarray)):
+            self.include_scale = include_scale
+        else:
+            self.include_scale = [include_scale,] * self.J
+
+    def forward(self, coeffs):
+        """
+        coeffs (yl, yh): tuple of low-pass (yl) and band-pass (yh) coefficients.
+        """
+        if True in self.include_scale:
+            x_phi, x_psis = coeffs[0][self.J-1], coeffs[1]
+        else:
+            x_phi, x_psis = coeffs
+        
+        assert len(x_psis) == self.J
+
+        if self.alternate_gh:
+            raise NotImplementedError #TBD
+        
+        ## LEVEL 2 AND GREATER ##
+        for j in range(self.J-1, 0, -1):
+            x_psi = x_psis[j]
+            assert x_psi.shape[-1] * 2 == x_phi.shape[-1]
+            
+            x_phi = INV_J2PLUS.apply(x_phi, x_psi, self.g0a, self.g1a, self.g0b, self.g1b, self.padding_mode, 
+                self.normalize)
+
+        ## LEVEL 1 ##
+        x_phi = INV_J1.apply(x_phi, x_psis[0], self.g0o, self.g1o, self.padding_mode, 
+            self.normalize)
+        
+        return x_phi

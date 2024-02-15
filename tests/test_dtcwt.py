@@ -14,7 +14,7 @@ def test_dtcwt(skip_hps, include_scale):
 @pytest.mark.parametrize('J', list(range(1, 10)))
 def test_fwd_same(J):
     decimal = 4
-    X = np.random.rand(2**(J))
+    X = np.random.rand(2**J)
     Xt = torch.tensor(X, dtype=torch.get_default_dtype()).view(1,1,2**J)
     xfm_murenn = murenn.DTCWTForward(J=J, alternate_gh=False, include_scale=False,padding_mode='reflect', normalize=False)
     phis, psis = xfm_murenn(Xt)
