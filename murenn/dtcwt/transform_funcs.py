@@ -128,7 +128,7 @@ class INV_J1(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, lo, hi, g0, g1, padding_mode, normalize):
+    def forward(ctx, lo, hi, g0, g1, padding_mode):
         """
         Inverse dual-tree complex wavelet transform at level 1.
 
@@ -194,4 +194,7 @@ class INV_J2PLUS(torch.autograd.Function):
         bp = torch.stack((bp.imag, bp.real), dim=-1).view(b, ch, T)
         lo = colifilt(lo, g0a_rep, g0b_rep, padding_mode) + colifilt(bp, g1a_rep, g1b_rep, padding_mode)
 
-        return lo
+        if normalize:
+            return np.sqrt(2) * lo
+        else:
+            return lo

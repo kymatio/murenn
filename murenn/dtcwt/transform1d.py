@@ -5,6 +5,12 @@ import torch.nn
 from murenn.dtcwt.lowlevel import prep_filt
 from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
 
+'''
+TBD: 
+- backward function
+- remove dependency of pytorch_wavelets
+- same initialization of DTCWTForward, DTCWTInverse
+'''
 
 class DTCWTForward(torch.nn.Module):
     """Performs a DTCWT forward decomposition of a PyTorch tensor containing
@@ -248,20 +254,23 @@ class DTCWTInverse(torch.nn.Module):
             x_phi, x_psis = coeffs
         
         assert len(x_psis) == self.J
-
-        if self.alternate_gh:
-            raise NotImplementedError #TBD
         
         ## LEVEL 2 AND GREATER ##
         for j in range(self.J-1, 0, -1):
             x_psi = x_psis[j]
             assert x_psi.shape[-1] * 2 == x_phi.shape[-1]
             
-            x_phi = INV_J2PLUS.apply(x_phi, x_psi, self.g0a, self.g1a, self.g0b, self.g1b, self.padding_mode, 
+            if (j%2 == 1) and self.alternate_gh:
+                x_psi = torch.conj(x_psi)
+                # Pick the dual filters g0a, g1a, etc. instead of h0a, h1a, etc.
+                g0a, g1a, g0b, g1b = self.h0a, self.h1a, self.h0b, self.h1b
+            else:
+                g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b   
+                
+            x_phi = INV_J2PLUS.apply(x_phi, x_psi, g0a, g1a, g0b, g1b, self.padding_mode, 
                 self.normalize)
 
         ## LEVEL 1 ##
-        x_phi = INV_J1.apply(x_phi, x_psis[0], self.g0o, self.g1o, self.padding_mode, 
-            self.normalize)
+        x_phi = INV_J1.apply(x_phi, x_psis[0], self.g0o, self.g1o, self.padding_mode)
         
         return x_phi
