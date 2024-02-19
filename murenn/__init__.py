@@ -12,7 +12,7 @@ __all__ = ["DTCWT", "DTCWTForward"]
 
 
 # Submodule imports
-from .dtcwt.transform1d import DTCWTForward
+from .dtcwt.transform1d import DTCWTForward, DTCWTInverse
 from .version import version as __version__
 
 # PytW-like aliases
