@@ -31,6 +31,6 @@ setup(
     install_requires=['pytorch_wavelets', 'PyWavelets'],
     dependency_links=[
         'pytorch_wavelets @ git+ssh://git@github.com/fbcotter/pytorch_wavelets@1.1.0#egg=pytorch_wavelets-1.1.0',
-        'dtcwt @ git+ssh://git@github.com/xir4n/dtcwt'
+        'dtcwt @ git+ssh://git@github.com/xir4n/dtcwt@main'
     ],
 )
