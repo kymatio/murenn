@@ -8,10 +8,8 @@ def reflect(x, minx, maxx):
     and *maxx*.  If *x* contains integers and *minx* and *maxx* are (integers +
     0.5), the ramps will have repeated max and min samples.
 
-    .. codeauthor:: Xiran Zhang <xiran.zhang@ls2n.fr>, Feb 2024
-    .. adapted from:: Rich Wareham <rjw57@cantab.net>, Aug 2013
-                      Nick Kingsbury, Cambridge University, January 1999.
-
+    Adapted from Rich Wareham's dtcwt NumPy library (2013), which in turn was
+    adapted from Nick Kingsbury's MATLAB implementation (1999).
     """
     rng = maxx - minx
     rng_by_2 = 2 * rng
