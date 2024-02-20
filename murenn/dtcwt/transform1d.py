@@ -1,16 +1,11 @@
 import numpy as np
-import pytorch_wavelets as pytw
+from dtcwt.coeffs import biort as _biort, qshift as _qshift
 import torch.nn
 
 from murenn.dtcwt.lowlevel import prep_filt
 from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
 
-'''
-TBD: 
-- backward function
-- remove dependency of pytorch_wavelets
-- same initialization of DTCWTForward, DTCWTInverse
-'''
+
 
 class DTCWTForward(torch.nn.Module):
     """Performs a DTCWT forward decomposition of a PyTorch tensor containing
@@ -68,9 +63,7 @@ class DTCWTForward(torch.nn.Module):
         # Load first-level biorthogonal wavelet filters from disk.
         # h0o is the low-pass filter.
         # h1o is the high-pass filter.
-        h0o, _, h1o, _ = pytw.dtcwt.coeffs._load_from_file(
-            level1, ("h0o", "g0o", "h1o", "g1o")
-        )
+        h0o, g0o, h1o, g1o = _biort(level1)
         self.register_buffer("h0o", prep_filt(h0o))
         self.register_buffer("h1o", prep_filt(h1o))
 
@@ -83,9 +76,7 @@ class DTCWTForward(torch.nn.Module):
         # h1b is the high-pass filter from tree b (imaginary part).
         # g1a is the high-pass dual filter from tree a (real part).
         # g1b is the high-pass dual filter from tree b (imaginary part).
-        h0a, h0b, g0a, g0b, h1a, h1b, g1a, g1b = pytw.dtcwt.coeffs._load_from_file(
-            qshift, ("h0a", "h0b", "g0a", "g0b", "h1a", "h1b", "g1a", "g1b")
-        )
+        h0a, h0b, g0a, g0b, h1a, h1b, g1a, g1b = _qshift(qshift)
         self.register_buffer("h0a", prep_filt(h0a))
         self.register_buffer("h0b", prep_filt(h0b))
         self.register_buffer("g0a", prep_filt(g0a))
@@ -228,16 +219,15 @@ class DTCWTInverse(torch.nn.Module):
         self.normalize = normalize
 
         # Load first-level biorthogonal wavelet filters from disk.
-        _, g0o, _, g1o = pytw.dtcwt.coeffs._load_from_file(
-            level1, ("h0o", "g0o", "h1o", "g1o")
-        )
+        # _, g0o, _, g1o = pytw.dtcwt.coeffs._load_from_file(
+        #     level1, ("h0o", "g0o", "h1o", "g1o")
+        # )
+        h0o, g0o, h1o, g1o = _biort(level1)
         self.register_buffer("g0o", prep_filt(g0o))
         self.register_buffer("g1o", prep_filt(g1o))
 
 
-        h0a, h0b, g0a, g0b, h1a, h1b, g1a, g1b = pytw.dtcwt.coeffs._load_from_file(
-            qshift, ("h0a", "h0b", "g0a", "g0b", "h1a", "h1b", "g1a", "g1b")
-        )
+        h0a, h0b, g0a, g0b, h1a, h1b, g1a, g1b = _qshift(qshift)
         self.register_buffer("h0a", prep_filt(h0a))
         self.register_buffer("h0b", prep_filt(h0b))
         self.register_buffer("g0a", prep_filt(g0a))
