@@ -28,5 +28,5 @@ setup(
     ],
     keywords='wavelets, deep learning, signal processing, audio, speech, music',
     license='3-clause BSD',
-    install_requires=['dtcwt>=0.13.0', 'torch>2.0.0']
+    install_requires=['dtcwt>=0.13.0', 'torch>=2.0.0']
 )
