@@ -14,7 +14,7 @@ def prep_filt(h):
 
 def colifilt(x, ha, hb, padding_mode):
     if x is None or x.shape == torch.Size([]):
-        return torch.zeros(1,1,1,1, device=x.device)
+        return torch.zeros(1,1,1, device=x.device)
     m = ha.shape[-1]
     m2 = m // 2
     hao = ha[:,:,1::2]

@@ -20,7 +20,7 @@ class FWD_J1(torch.autograd.Function):
             h0 is the low-pass analysis filter
             h1 is the high-pass analysis filter
             skip_hps: if True, skip high-pass filtering
-            padding_mode: 'constant', 'reflect', 'replicate' or 'circular'
+            padding_mode: 'constant', 'symmetric', 'replicate' or 'circular'
 
         Returns:
             lo: low-pass output (-pi/4 to pi/4)
@@ -39,14 +39,14 @@ class FWD_J1(torch.autograd.Function):
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
-            hi = x.new_zeros([])
+            hi = x.new_zeros(x.shape)
         else:
             hi = torch.nn.functional.conv1d(
             pad_(x, h1, padding_mode), h1_rep, groups=ch)
 
         # Return low-pass (x_phi) and high-pass (x_psi) pair
         return lo, hi[:,:,::2] + 1j * hi[:,:,1::2]
-    # TBD: backward function !!!
+
 
 
 class FWD_J2PLUS(torch.autograd.Function):
@@ -70,7 +70,7 @@ class FWD_J2PLUS(torch.autograd.Function):
             h0b: low-pass filter of tree b (imaginary part)
             h1b: high-pass filter of tree b (imaginary part)
             skip_hps: if True, skip high-pass filtering
-            padding_mode: 'constant'(zero padding), 'reflect', 'replicate' or 'circular'
+            padding_mode: 'constant'(zero padding), 'symmetric', 'replicate' or 'circular'
             normalise: bool, normalise or not
 
         Returns:
@@ -85,6 +85,7 @@ class FWD_J2PLUS(torch.autograd.Function):
         h1b_rep = h1b.repeat(ch, 1, 1)
         ctx.save_for_backward(h0a_rep, h1a_rep, h0b_rep, h1b_rep)
 
+        assert torch.sum(h0a*h0b) > 0
         # Input tensor for tree a and tree b. The first two samples are removed so
         # that the length of 'lo' will be the length of 'x_phi' divided by 2.
         x_phi = pad_(x_phi, h0a, padding_mode, False)
@@ -99,7 +100,8 @@ class FWD_J2PLUS(torch.autograd.Function):
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
-            bp = x_a.new_zeros([])
+            bp_a = lo_a.new_zeros(lo_a.shape)
+            bp_b = lo_a.new_zeros(lo_b.shape)
         else:
             bp_a = torch.nn.functional.conv1d(
                 x_a, h1a_rep, stride=2, groups=ch
@@ -107,7 +109,7 @@ class FWD_J2PLUS(torch.autograd.Function):
             bp_b = torch.nn.functional.conv1d(
                 x_b, h1b_rep, stride=2, groups=ch
                 )
-            bp = bp_b + 1j * bp_a
+        bp = bp_b + 1j * bp_a
         
         # 'lo' the low-pass output such that lo[2t]=lo_a[t] and lo[2t+1]=lo_b[t]
         lo = torch.stack((lo_a, lo_b), dim=-1).view(b, ch, T//2)
@@ -118,8 +120,6 @@ class FWD_J2PLUS(torch.autograd.Function):
             return np.sqrt(1/2) * lo, np.sqrt(1/2) * bp
         else:
             return lo, bp
-        
-    # TBD: backward function !!!
 
 
 class INV_J1(torch.autograd.Function):

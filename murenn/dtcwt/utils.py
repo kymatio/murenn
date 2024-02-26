@@ -26,14 +26,14 @@ def pad_(x, h, padding_mode, same_pad = True):
     Args:
         x is the input Tensor
         h is the conv1d filter
-        padding_mode: 'constant', 'reflect', 'replicate' or 'circular'
+        padding_mode: 'constant', 'symmetric', 'replicate' or 'circular'
         same_pad: if False, full padding will be applied
     """
     padding_total = h.shape[-1]-1
     padding_left = padding_total//2 if same_pad else h.shape[-1]
-    padding_right = padding_total - padding_left if same_pad else h.shape[-1]
+    padding_right = padding_total//2 if same_pad else h.shape[-1]
 
-    if padding_mode == 'reflect':
+    if padding_mode == 'symmetric':
         l = x.shape[-1]
         xe = reflect(torch.arange(-padding_left, l+padding_right, dtype=torch.int32), -0.5, l-0.5)
         out = x[:,:,xe]

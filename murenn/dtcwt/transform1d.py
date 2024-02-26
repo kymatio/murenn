@@ -29,7 +29,7 @@ class DTCWTForward(torch.nn.Module):
         alternate_gh (bool): If True (default), alternates between filter pairs
             (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
             Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
-        padding_mode (str): One of 'zeros'(defalt), 'reflect', 'replicate', 
+        padding_mode (str): One of 'symmetric'(defalt), 'zeros', 'replicate', 
             and 'circular'. Padding scheme for the filters. 
         normalize (bool): If True (default), the output will be normalized by a 
             factor of 1/sqrt(2)
@@ -43,7 +43,7 @@ class DTCWTForward(torch.nn.Module):
         skip_hps=False,
         include_scale=False,
         alternate_gh=True,
-        padding_mode='zeros',
+        padding_mode='symmetric',
         normalize=True
     ):
         # Instantiate PyTorch NN Module
@@ -63,7 +63,7 @@ class DTCWTForward(torch.nn.Module):
         # Load first-level biorthogonal wavelet filters from disk.
         # h0o is the low-pass filter.
         # h1o is the high-pass filter.
-        h0o, g0o, h1o, g1o = dtcwt.coeffs.biort(level1)
+        h0o, _, h1o, _ = dtcwt.coeffs.biort(level1)
         self.register_buffer("h0o", prep_filt(h0o))
         self.register_buffer("h1o", prep_filt(h1o))
 
@@ -188,7 +188,7 @@ class DTCWTInverse(torch.nn.Module):
         alternate_gh (bool): If True (default), alternates between filter pairs
             (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
             Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
-        padding_mode (str): One of 'zeros'(defalt), 'reflect', 'replicate', 
+        padding_mode (str): One of 'symmetric'(defalt), 'zeros', 'replicate', 
             and 'circular'. Padding scheme for the filters. 
         normalize (bool): If True (default), the output will be normalized by a 
             factor of 1/sqrt(2)
@@ -201,7 +201,7 @@ class DTCWTInverse(torch.nn.Module):
         skip_hps=False,
         include_scale=False,
         alternate_gh=True,
-        padding_mode='zeros',
+        padding_mode='symmetric',
         normalize=True
     ):
         # Instantiate PyTorch NN Module
