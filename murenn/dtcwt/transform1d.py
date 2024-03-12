@@ -7,7 +7,7 @@ from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
 
 
 
-class DTCWTForward(torch.nn.Module):
+class DTCWTDirect(torch.nn.Module):
     """Performs a DTCWT forward decomposition of a PyTorch tensor containing
     1-D signals, potentially multichannel.
 
@@ -107,11 +107,11 @@ class DTCWTForward(torch.nn.Module):
                 `(B, C, T)` where B is the batch size, C is the number of
                 channels and T is the number of time samples.
                 Note that T must be a multiple of 2**J, where J is the number
-                of wavelet scales (see documentation of DTCWTForward constructor).
+                of wavelet scales (see documentation of DTCWTDirect constructor).
 
         Returns:
             (yl, yh): tuple of low-pass (yl) and band-pass (yh) coefficients.
-                If include_scale is True (see DTCWTForward constructor), yl is a
+                If include_scale is True (see DTCWTDirect constructor), yl is a
                 list of low-pass coefficients at all wavelet scales 1 to (J-1).
                 Otherwise (default), yl is a real-valued PyTorch tensor of shape
                 `(B, C, T/2**(J-1))`.
@@ -168,7 +168,7 @@ class DTCWTForward(torch.nn.Module):
 
 class DTCWTInverse(torch.nn.Module):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
-    should be initialize in the same manner of DTCWTForward.
+    should be initialize in the same manner of DTCWTDirect.
 
     Args: 
         level1 (str): One of 'antonini', 'legall', 'near_sym_a', 'near_sym_b'.
