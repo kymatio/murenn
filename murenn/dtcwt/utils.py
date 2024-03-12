@@ -40,3 +40,27 @@ def pad_(x, h, padding_mode, same_pad = True):
     else: 
         out = torch.nn.functional.pad(x, (padding_left, padding_right), padding_mode)
     return out
+
+def mode_to_int(mode):
+    if mode == 'symmetric':
+        return 0
+    elif mode == 'constant':
+        return 1 
+    elif mode == 'replicate':
+        return 2
+    elif mode == 'circular':
+        return 3
+    else:
+        raise ValueError("Unkown pad type: {}".format(mode))
+
+def int_to_mode(mode):
+    if mode == 0:
+        return 'symmetric'
+    elif mode == 1:
+        return 'constant'
+    elif mode == 2:
+        return 'replicate'
+    elif mode == 3:
+        return 'circular'
+    else:
+        raise ValueError("Unkown pad type: {}".format(mode))
