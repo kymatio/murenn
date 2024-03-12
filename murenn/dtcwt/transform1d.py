@@ -6,8 +6,72 @@ from murenn.dtcwt.lowlevel import prep_filt
 from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
 
 
+class DTCWT(torch.nn.Module):
+    def __init__(
+        self,
+        level1="near_sym_a",
+        qshift="qshift_a",
+        J=8,
+        skip_hps=False,
+        include_scale=False,
+        alternate_gh=True,
+        padding_mode='zeros',
+        normalize=True
+    ):
+        super().__init__()
+        self.level1 = level1
+        self.qshift = qshift
+        self.J = J
+        self.alternate_gh = alternate_gh
+        self.normalize = normalize
 
-class DTCWTDirect(torch.nn.Module):
+        # Parse the "skip_hps" argument for skipping finest scales.
+        if isinstance(skip_hps, (list, tuple, np.ndarray)):
+            self.skip_hps = skip_hps
+        else:
+            self.skip_hps = [skip_hps,] * self.J
+        
+        # Parse the "include_scale" argument for including other low-pass
+        # outputs in addition to the coarsest scale.
+        if isinstance(include_scale, (list, tuple, np.ndarray)):
+            self.include_scale = include_scale
+        else:
+            self.include_scale = [include_scale,] * self.J
+        
+        if padding_mode == 'zeros':
+            self.padding_mode = 'constant'
+        else:
+            self.padding_mode = padding_mode
+        
+        # Load first-level biorthogonal wavelet filters from disk.
+        # h0o is the low-pass filter.
+        # h1o is the high-pass filter.
+        h0o, g0o, h1o, g1o = dtcwt.coeffs.biort(level1)
+        self.register_buffer("g0o", prep_filt(g0o))
+        self.register_buffer("g1o", prep_filt(g1o))
+        self.register_buffer("h0o", prep_filt(h0o))
+        self.register_buffer("h1o", prep_filt(h1o))
+
+        # Load higher-level quarter-shift wavelet filters from disk.
+        # h0a is the low-pass filter from tree a (real part).
+        # h0b is the low-pass filter from tree b (imaginary part).
+        # g0a is the low-pass dual filter from tree a (real part).
+        # g0b is the low-pass dual filter from tree b (imaginary part).
+        # h1a is the high-pass filter from tree a (real part).
+        # h1b is the high-pass filter from tree b (imaginary part).
+        # g1a is the high-pass dual filter from tree a (real part).
+        # g1b is the high-pass dual filter from tree b (imaginary part).
+        h0a, h0b, g0a, g0b, h1a, h1b, g1a, g1b = dtcwt.coeffs.qshift(qshift)
+        self.register_buffer("h0a", prep_filt(h0a))
+        self.register_buffer("h0b", prep_filt(h0b))
+        self.register_buffer("g0a", prep_filt(g0a))
+        self.register_buffer("g0b", prep_filt(g0b))
+        self.register_buffer("h1a", prep_filt(h1a))
+        self.register_buffer("h1b", prep_filt(h1b))
+        self.register_buffer("g1a", prep_filt(g1a))
+        self.register_buffer("g1b", prep_filt(g1b))
+
+class DTCWTDirect(DTCWT):
     """Performs a DTCWT forward decomposition of a PyTorch tensor containing
     1-D signals, potentially multichannel.
 
@@ -34,70 +98,6 @@ class DTCWTDirect(torch.nn.Module):
         normalize (bool): If True (default), the output will be normalized by a 
             factor of 1/sqrt(2)
     """
-
-    def __init__(
-        self,
-        level1="near_sym_a",
-        qshift="qshift_a",
-        J=8,
-        skip_hps=False,
-        include_scale=False,
-        alternate_gh=True,
-        padding_mode='zeros',
-        normalize=True
-    ):
-        # Instantiate PyTorch NN Module
-        super().__init__()
-
-        # Store metadata
-        self.level1 = level1
-        self.qshift = qshift
-        self.J = J
-        self.alternate_gh = alternate_gh
-        if padding_mode == 'zeros':
-            self.padding_mode = 'constant'
-        else:
-            self.padding_mode = padding_mode
-        self.normalize = normalize
-
-        # Load first-level biorthogonal wavelet filters from disk.
-        # h0o is the low-pass filter.
-        # h1o is the high-pass filter.
-        h0o, g0o, h1o, g1o = dtcwt.coeffs.biort(level1)
-        self.register_buffer("h0o", prep_filt(h0o))
-        self.register_buffer("h1o", prep_filt(h1o))
-
-        # Load higher-level quarter-shift wavelet filters from disk.
-        # h0a is the low-pass filter from tree a (real part).
-        # h0b is the low-pass filter from tree b (imaginary part).
-        # g0a is the low-pass dual filter from tree a (real part).
-        # g0b is the low-pass dual filter from tree b (imaginary part).
-        # h1a is the high-pass filter from tree a (real part).
-        # h1b is the high-pass filter from tree b (imaginary part).
-        # g1a is the high-pass dual filter from tree a (real part).
-        # g1b is the high-pass dual filter from tree b (imaginary part).
-        h0a, h0b, g0a, g0b, h1a, h1b, g1a, g1b = dtcwt.coeffs.qshift(qshift)
-        self.register_buffer("h0a", prep_filt(h0a))
-        self.register_buffer("h0b", prep_filt(h0b))
-        self.register_buffer("g0a", prep_filt(g0a))
-        self.register_buffer("g0b", prep_filt(g0b))
-        self.register_buffer("h1a", prep_filt(h1a))
-        self.register_buffer("h1b", prep_filt(h1b))
-        self.register_buffer("g1a", prep_filt(g1a))
-        self.register_buffer("g1b", prep_filt(g1b))
-
-        # Parse the "skip_hps" argument for skipping finest scales.
-        if isinstance(skip_hps, (list, tuple, np.ndarray)):
-            self.skip_hps = skip_hps
-        else:
-            self.skip_hps = [skip_hps,] * self.J
-
-        # Parse the "include_scale" argument for including other low-pass
-        # outputs in addition to the coarsest scale.
-        if isinstance(include_scale, (list, tuple, np.ndarray)):
-            self.include_scale = include_scale
-        else:
-            self.include_scale = [include_scale,] * self.J
 
     def forward(self, x):
         """Forward Dual-Tree Complex Wavelet Transform (DTCWT) of a 1-D signal.
@@ -166,9 +166,9 @@ class DTCWTDirect(torch.nn.Module):
         else:
             return x_phi, x_psis
 
-class DTCWTInverse(torch.nn.Module):
+class DTCWTInverse(DTCWT):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
-    should be initialize in the same manner of DTCWTDirect.
+    should be initialized in the same manner as DTCWTDirect.
 
     Args: 
         level1 (str): One of 'antonini', 'legall', 'near_sym_a', 'near_sym_b'.
@@ -193,59 +193,6 @@ class DTCWTInverse(torch.nn.Module):
         normalize (bool): If True (default), the output will be normalized by a 
             factor of 1/sqrt(2)
     """
-    def __init__(
-        self,
-        level1="near_sym_a",
-        qshift="qshift_a",
-        J=8,
-        skip_hps=False,
-        include_scale=False,
-        alternate_gh=True,
-        padding_mode='zeros',
-        normalize=True
-    ):
-        # Instantiate PyTorch NN Module
-        super().__init__()
-
-        # Store metadata
-        self.level1 = level1
-        self.qshift = qshift
-        self.J = J
-        self.alternate_gh = alternate_gh
-        if padding_mode == 'zeros':
-            self.padding_mode = 'constant'
-        else:
-            self.padding_mode = padding_mode
-        self.normalize = normalize
-
-        # Load first-level biorthogonal wavelet filters from disk.
-        h0o, g0o, h1o, g1o = dtcwt.coeffs.biort(level1)
-        self.register_buffer("g0o", prep_filt(g0o))
-        self.register_buffer("g1o", prep_filt(g1o))
-
-
-        h0a, h0b, g0a, g0b, h1a, h1b, g1a, g1b = dtcwt.coeffs.qshift(qshift)
-        self.register_buffer("h0a", prep_filt(h0a))
-        self.register_buffer("h0b", prep_filt(h0b))
-        self.register_buffer("g0a", prep_filt(g0a))
-        self.register_buffer("g0b", prep_filt(g0b))
-        self.register_buffer("h1a", prep_filt(h1a))
-        self.register_buffer("h1b", prep_filt(h1b))
-        self.register_buffer("g1a", prep_filt(g1a))
-        self.register_buffer("g1b", prep_filt(g1b))
-
-        # Parse the "skip_hps" argument for skipping finest scales.
-        if isinstance(skip_hps, (list, tuple, np.ndarray)):
-            self.skip_hps = skip_hps
-        else:
-            self.skip_hps = [skip_hps,] * self.J
-
-        # Parse the "include_scale" argument for including other low-pass
-        # outputs in addition to the coarsest scale.
-        if isinstance(include_scale, (list, tuple, np.ndarray)):
-            self.include_scale = include_scale
-        else:
-            self.include_scale = [include_scale,] * self.J
 
     def forward(self, coeffs):
         """
