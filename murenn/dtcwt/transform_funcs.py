@@ -15,7 +15,7 @@ class FWD_J1(torch.autograd.Function):
         Forward dual-tree complex wavelet transform at level 1.
 
         Args:
-            ctx is the DTCWTForward object
+            ctx is the DTCWTDirect object
             x is the input Tensor
             h0 is the low-pass analysis filter
             h1 is the high-pass analysis filter
@@ -63,7 +63,7 @@ class FWD_J2PLUS(torch.autograd.Function):
         Forward dual-tree complex wavelet transform at levels 2 and coarser.
 
         Args:
-            ctx: DTCWTForward object
+            ctx: DTCWTDirect object
             x_phi: input Tensor
             h0a: low-pass filter of tree a (real part)
             h1a: high-pass filter of tree a (real part)
