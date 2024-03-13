@@ -175,11 +175,11 @@ class INV_J1(torch.autograd.Function):
         ctx.mode = mode_to_int(padding_mode)
 
         # Apply dual low-pass filtering
-        x0 = torch.nn.functional.conv1d(pad_(lo, g0, padding_mode), g0_rep)
+        x0 = torch.nn.functional.conv1d(pad_(lo, g0, padding_mode), g0_rep, groups=ch)
 
         # Apply dual high-pass filtering
         hi = torch.stack((hi_r, hi_i), dim=-1).view(b, ch, T)
-        x1 = torch.nn.functional.conv1d(pad_(hi, g1, padding_mode), g1_rep)
+        x1 = torch.nn.functional.conv1d(pad_(hi, g1, padding_mode), g1_rep, groups=ch)
 
         # Mix low-pass and high-pass contributions
         x = x0 + x1
