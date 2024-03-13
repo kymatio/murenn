@@ -60,7 +60,7 @@ def test_inv_j1():
 
 
 @pytest.mark.parametrize("normalize", [True, False])
-def test_fwd_j2(normalize):
+def test_inv_j2(normalize):
     J = 2
     eps = 1e-3
     atol = 1e-4

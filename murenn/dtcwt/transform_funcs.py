@@ -36,7 +36,7 @@ class FWD_J1(torch.autograd.Function):
         ctx.skip_hps = skip_hps
         ctx.mode = mode_to_int(padding_mode)
 
-        # Apply low-pass filterin
+        # Apply low-pass filtering
         lo = torch.nn.functional.conv1d(
             pad_(x, h0, padding_mode), h0_rep, groups=ch)
 
@@ -105,8 +105,6 @@ class FWD_J2PLUS(torch.autograd.Function):
         ctx.skip_hps = skip_hps
         ctx.mode = mode_to_int(padding_mode)
         ctx.normalize = normalize
-
-        assert torch.sum(h0a*h0b) > 0
 
         # Apply low-pass filtering on trees a (real) and b (imaginary).
         lo = coldfilt(x_phi, h0a_rep, h0b_rep, padding_mode)
@@ -244,7 +242,6 @@ class INV_J2PLUS(torch.autograd.Function):
 
         bp = torch.stack((bp_i, bp_r), dim=-1).view(b, ch, T)
         lo = colifilt(lo, g0a_rep, g0b_rep, padding_mode) + colifilt(bp, g1a_rep, g1b_rep, padding_mode)
-        lo = torch.stack([lo[:,:ch], lo[:,ch:2*ch], lo[:,2*ch:3*ch], lo[:,3*ch:]], dim=3).view(b, ch, T*2)
 
         if normalize:
             return np.sqrt(2) * lo

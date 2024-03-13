@@ -175,7 +175,7 @@ class DTCWTInverse(DTCWT):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
     should be initialized in the same manner as DTCWTDirect.
 
-    Args: should be the same as DTCWTForward.
+    Args: should be the same as DTCWTDirect.
         level1 (str): One of 'antonini', 'legall', 'near_sym_a', 'near_sym_b'.
             Specifies the first-level biorthogonal wavelet filters.
         qshift (str): One of 'qshift_06', 'qshift_a', 'qshift_b', 'qshift_c',

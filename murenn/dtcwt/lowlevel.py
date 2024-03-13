@@ -49,6 +49,6 @@ def colifilt(x, ha, hb, padding_mode):
     h = torch.cat((h1, h2, h3, h4), dim=0)
 
     x = torch.nn.functional.conv1d(x, h, groups=4*ch)
-    # x = torch.stack([x[:,:ch], x[:,ch:2*ch], x[:,2*ch:3*ch], x[:,3*ch:]], dim=3).view(batch, ch, T*2)
+    x = torch.stack([x[:,:ch], x[:,ch:2*ch], x[:,2*ch:3*ch], x[:,3*ch:]], dim=3).view(batch, ch, T*2)
 
     return x
