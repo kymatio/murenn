@@ -8,7 +8,7 @@ framework.
 """
 
 # List of top-level public names.
-__all__ = ["DTCWT", "DTCWTDirect"]
+__all__ = ["DTCWT", "DTCWTDirect", "DTCWTInverse"]
 
 
 # Submodule imports

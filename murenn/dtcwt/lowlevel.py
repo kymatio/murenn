@@ -10,11 +10,20 @@ def prep_filt(h):
     # Conversely, we prepend two singleton dimensions: one for
     # the signal index (in the batch) and the other for the
     # channel index (for multimodal time series).
-    return torch.tensor(h[None, None, :, 0], dtype=torch.float32)
+    return torch.tensor(h[None, None, :, 0], dtype=torch.get_default_dtype())
+
+def coldfilt(x, ha, hb, padding_mode):
+    b, ch, T = x.shape
+    assert T % 4 == 0
+    x = pad_(x, ha, padding_mode, False)
+    # Input tensor for tree a and tree b. The first two samples are removed so
+    # that the length of 'lo' will be the length of 'x_phi' divided by 2.
+    x = torch.cat((x[:,:,2::2], x[:,:,3::2]), dim=1)
+    h = torch.cat((ha, hb), dim=0)
+    x = torch.nn.functional.conv1d(x, h, stride=2, groups=ch*2)
+    return x
 
 def colifilt(x, ha, hb, padding_mode):
-    if x is None or x.shape == torch.Size([]):
-        return torch.zeros(1,1,1,1, device=x.device)
     m = ha.shape[-1]
     m2 = m // 2
     hao = ha[:,:,1::2]
