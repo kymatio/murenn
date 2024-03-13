@@ -202,7 +202,7 @@ class DTCWTInverse(DTCWT):
         alternate_gh (bool): If True (default), alternates between filter pairs
             (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
             Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
-        padding_mode (str): One of 'symmetric'(defalt), 'zeros', 'replicate', 
+        padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate', 
             and 'circular'. Padding scheme for the filters. 
         normalize (bool): If True (default), the output will be normalized by a 
             factor of 1/sqrt(2)

@@ -131,7 +131,7 @@ class FWD_J2PLUS(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dx_phi, dx_psi_r, dx_psi_i):
-        g0a, g1a, g0b, g1b = ctx.saved_tensors
+        g0b, g1b, g0a, g1a = ctx.saved_tensors
         skip_hps = ctx.skip_hps
         padding_mode = int_to_mode(ctx.mode)
         normalize = ctx.normalize
@@ -143,7 +143,6 @@ class FWD_J2PLUS(torch.autograd.Function):
             if not skip_hps:
                 dx_psi = torch.stack((dx_psi_i, dx_psi_r), dim=-1).view(b, ch, T)
                 dx += colifilt(dx_psi, g1a, g1b, padding_mode)
-            dx = torch.stack([dx[:,2*ch:3*ch], dx[:,3*ch:], dx[:,:ch], dx[:,ch:2*ch]], dim=3).view(b, ch, T*2)
             if normalize:
                 dx *= 1/np.sqrt(2)
         return dx, None, None, None, None, None, None, None
@@ -252,24 +251,24 @@ class INV_J2PLUS(torch.autograd.Function):
         else:
             return lo
 
-    # @staticmethod
-    # def backward(ctx, dx):
-    #     g0a, g1a, g0b, g1b = ctx.saved_tensors
-    #     padding_mode = int_to_mode(ctx.mode)
-    #     normalize = ctx.normalize
-    #     b, ch, T = dx.shape
-    #     dlo, dbp = None, None
-    #     if ctx.needs_input_grad[0]:
-    #         dlo = coldfilt(dx, g0a, g0b, padding_mode)
-    #         dlo = torch.stack([dlo[:,:ch], dlo[:,ch:2*ch]], dim=-1).view(b, ch, T//2)
-    #         if normalize:
-    #             dlo *= np.sqrt(2)
-    #         if ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
-    #             dbp = coldfilt(dx, g1a, g1b, padding_mode)
-    #             if normalize:
-    #                 dbp *= np.sqrt(2)
-    #             if ctx.needs_input_grad[1]:
-    #                 dbp_r = dbp[:,ch:2*ch]
-    #             if ctx.needs_input_grad[2]:
-    #                 dbp_i = dbp[:,:ch]
-    #     return dlo, dbp_r, dbp_i, None, None, None, None, None, None
+    @staticmethod
+    def backward(ctx, dx):
+        g0b, g1b, g0a, g1a = ctx.saved_tensors
+        padding_mode = int_to_mode(ctx.mode)
+        normalize = ctx.normalize
+        b, ch, T = dx.shape
+        dlo, dbp = None, None
+        if ctx.needs_input_grad[0]:
+            dlo = coldfilt(dx, g0a, g0b, padding_mode)
+            dlo = torch.stack([dlo[:,:ch], dlo[:,ch:2*ch]], dim=-1).view(b, ch, T//2)
+            if normalize:
+                dlo *= np.sqrt(2)
+            if ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
+                dbp = coldfilt(dx, g1a, g1b, padding_mode)
+                if normalize:
+                    dbp *= np.sqrt(2)
+                if ctx.needs_input_grad[1]:
+                    dbp_r = dbp[:,ch:2*ch]
+                if ctx.needs_input_grad[2]:
+                    dbp_i = dbp[:,:ch]
+        return dlo, dbp_r, dbp_i, None, None, None, None, None, None

@@ -59,16 +59,16 @@ def test_inv_j1():
     gradcheck(tf.INV_J1.apply, input, eps=eps, atol=atol)
 
 
-# @pytest.mark.parametrize("normalize", [True, False])
-# def test_fwd_j2(normalize):
-#     J = 2
-#     eps = 1e-3
-#     atol = 1e-4
-#     with set_double_precision():
-#         lo = torch.randn(1,1,8, device=dev, requires_grad=True)
-#         bp_r = torch.randn(1,1,4, device=dev, requires_grad=True)
-#         bp_i = torch.randn(1,1,4, device=dev, requires_grad=True)
-#         inv = murenn.DTCWTInverse(J=J, normalize=normalize).to(dev)
+@pytest.mark.parametrize("normalize", [True, False])
+def test_fwd_j2(normalize):
+    J = 2
+    eps = 1e-3
+    atol = 1e-4
+    with set_double_precision():
+        lo = torch.randn(1,1,8, device=dev, requires_grad=True)
+        bp_r = torch.randn(1,1,4, device=dev, requires_grad=True)
+        bp_i = torch.randn(1,1,4, device=dev, requires_grad=True)
+        inv = murenn.DTCWTInverse(J=J, normalize=normalize).to(dev)
 
-#     input = (lo, bp_r, bp_i, inv.g0a, inv.g1a, inv.g0b, inv.g1b, inv.padding_mode, inv.normalize)
-#     gradcheck(tf.INV_J2PLUS.apply, input, eps=eps, atol=atol)
+    input = (lo, bp_r, bp_i, inv.g0a, inv.g1a, inv.g0b, inv.g1b, inv.padding_mode, inv.normalize)
+    gradcheck(tf.INV_J2PLUS.apply, input, eps=eps, atol=atol)
