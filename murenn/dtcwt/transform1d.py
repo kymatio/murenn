@@ -156,7 +156,7 @@ class DTCWTDirect(DTCWT):
                 # The result is anti-analytic in the Hilbert sense.
                 # We conjugate the result to bring the spectrum back to (0, pi).
                 # This is purely by convention and for consistency through j.
-                x_psi_i *= -1
+                x_psi_i = -1 * x_psi_i
 
             x_psis.append(x_psi_r + 1j * x_psi_i)
 
