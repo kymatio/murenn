@@ -29,9 +29,9 @@ def test_inv(level1, qshift, J, alternate_gh, normalize):
     X = np.random.rand(2**J)
     Xt = torch.tensor(X, dtype=torch.get_default_dtype()).view(1,1,2**J)
     xfm_murenn = murenn.DTCWTDirect(J=J, level1=level1, qshift=qshift, alternate_gh=alternate_gh, include_scale=False,padding_mode='symmetric', normalize=normalize)
-    coeffs = xfm_murenn(Xt)
+    lp, bp = xfm_murenn(Xt)
     inv = murenn.DTCWTInverse(J=J, level1=level1, qshift=qshift,alternate_gh=alternate_gh, include_scale=False,padding_mode='symmetric', normalize=normalize)
-    X_rec = inv(coeffs)
+    X_rec = inv(lp, bp)
     torch.testing.assert_close(Xt, X_rec)
 
 @pytest.mark.parametrize("include_scale", [False, [0, 0, 1]])
@@ -41,7 +41,7 @@ def test_skip_hps(skip_hps, include_scale):
     X = np.random.rand(2**J)
     Xt = torch.tensor(X, dtype=torch.get_default_dtype()).view(1,1,2**J)
     xfm_murenn = murenn.DTCWTDirect(J=J, skip_hps=skip_hps, include_scale = include_scale)
-    coeffs = xfm_murenn(Xt)
+    lp, bp = xfm_murenn(Xt)
     inv = murenn.DTCWTInverse(J=J, skip_hps=skip_hps, include_scale = include_scale)
-    X_rec = inv(coeffs)
+    X_rec = inv(lp, bp)
     assert X_rec.shape == Xt.shape
