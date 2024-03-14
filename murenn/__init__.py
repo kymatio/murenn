@@ -17,3 +17,4 @@ from .version import version as __version__
 
 # PytW-like aliases
 DTCWT = DTCWTDirect
+IDTCWT = DTCWTInverse
