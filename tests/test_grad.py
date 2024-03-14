@@ -72,3 +72,28 @@ def test_inv_j2(normalize):
 
     input = (lo, bp_r, bp_i, inv.g0a, inv.g1a, inv.g0b, inv.g1b, inv.padding_mode, inv.normalize)
     gradcheck(tf.INV_J2PLUS.apply, input, eps=eps, atol=atol)
+
+
+@pytest.mark.parametrize("alternate_gh", [True, False])
+@pytest.mark.parametrize("normalize", [True, False])
+def test_autograd(alternate_gh, normalize):
+    b = 2
+    ch = 3
+    N = 2**5
+    x = torch.zeros(b, ch, N, requires_grad=True)
+    
+    J = 2
+    kwargs = dict(J=J, alternate_gh=alternate_gh, normalize=normalize)
+    dtcwt = murenn.DTCWT(**kwargs)
+    idtcwt = murenn.IDTCWT(**kwargs)
+
+    x_phi, x_psis = dtcwt(x)
+    y = idtcwt(x_phi, x_psis)
+    y[:, :, N//2].mean().backward()
+    g = x.grad.sum(axis=1).sum(axis=0)
+
+    dirac = torch.zeros(N)
+    dirac[N//2] = 1
+
+    assert torch.allclose(g, dirac, atol=1e-3)
+    assert x.grad.shape == (b, ch, N)
