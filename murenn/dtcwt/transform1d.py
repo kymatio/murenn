@@ -46,6 +46,8 @@ class DTCWT(torch.nn.Module):
         # Load first-level biorthogonal wavelet filters from disk.
         # h0o is the low-pass filter.
         # h1o is the high-pass filter.
+        # g0o is the low-pass inverse filter.
+        # g1o is the high-pass inverse filter.
         h0o, g0o, h1o, g1o = dtcwt.coeffs.biort(level1)
         self.register_buffer("g0o", prep_filt(g0o))
         self.register_buffer("g1o", prep_filt(g1o))
@@ -110,12 +112,11 @@ class DTCWTDirect(DTCWT):
                 of wavelet scales (see documentation of DTCWTDirect constructor).
 
         Returns:
-            (yl, yh): tuple of low-pass (yl) and band-pass (yh) coefficients.
-                If include_scale is True (see DTCWTDirect constructor), yl is a
-                list of low-pass coefficients at all wavelet scales 1 to (J-1).
-                Otherwise (default), yl is a real-valued PyTorch tensor of shape
-                `(B, C, T/2**(J-1))`.
-                Conversely, yh is a list of PyTorch tensors with J elements,
+            yl: low-pass coefficients. If include_scale is True (see DTCWTDirect 
+                constructor), yl is a list of low-pass coefficients at all wavelet 
+                scales 1 to (J-1). Otherwise (default), yl is a real-valued PyTorch
+                tensor of shape `(B, C, T/2**(J-1))`.
+            yh: band-pass coefficients. A list of PyTorch tensors with J elements,
                 containing the band-pass coefficients at all wavelets scales 1 to
                 (J-1). These tensors are complex-valued and have shapes:
                 `(B, C, T)`, `(B, C, T/2)`, `(B, C, T/4)`, etc."""
@@ -155,7 +156,7 @@ class DTCWTDirect(DTCWT):
                 # The result is anti-analytic in the Hilbert sense.
                 # We conjugate the result to bring the spectrum back to (0, pi).
                 # This is purely by convention and for consistency through j.
-                x_psi_i *= -1
+                x_psi_i = -1 * x_psi_i
 
             x_psis.append(x_psi_r + 1j * x_psi_i)
 
@@ -167,9 +168,10 @@ class DTCWTDirect(DTCWT):
         # If at least one of the booleans in the list include_scale is True,
         # return the list x_phis as yl. Otherwise, return the last x_phi.
         if True in self.include_scale:
-            return x_phis, x_psis
+            yl, yh = x_phis, x_psis
         else:
-            return x_phi, x_psis
+            yl, yh = x_phi, x_psis
+        return yl, yh
 
 class DTCWTInverse(DTCWT):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
@@ -199,19 +201,24 @@ class DTCWTInverse(DTCWT):
             factor of 1/sqrt(2)
     """
 
-    def forward(self, coeffs):
+    def forward(self, yl, yh):
         """
-        coeffs (x_phi, x_psis): tuple of low-pass (x_phi) and band-pass (x_psis) 
-            coefficients. Both x_phi and x_psis should be a list of Pytorch Tensor 
-            of shape `(B, C, T)` where B is the batch size, C is the number of channels
-            and T is the number of time samples.
+        Args:
+            yl: low-pass coefficients for the DTCWT reconstruction. If include_scale
+                is True (see DTCWTInverse constructor), yl should be a list of low-pass
+                coefficients at all wavelet scales 1 to (J-1). Otherwise (default), 
+                yl should be a real-valued PyTorch tensor of shape `(B, C, T/2**(J-1))`.
+            yh: band-pass coefficients for the DTCWT reconstruction. A list of PyTorch
+                tensors with J elements, containing the band-pass coefficients at all
+                wavelets scales 1 to (J-1). These tensors are complex-valued and must 
+                have shapes: `(B, C, T)`, `(B, C, T/2)`, `(B, C, T/4)`, etc.
         """
 
         # x_phi the low-pass, x_psis the band-pass
         if True in self.include_scale:
-            x_phi, x_psis = coeffs[0][self.J-1], coeffs[1]
+            x_phi, x_psis = yl[self.J-1], yh
         else:
-            x_phi, x_psis = coeffs
+            x_phi, x_psis = yl, yh
         
         # Assert that the band-pass sequence has the same length as the
         # level of decomposition

@@ -59,10 +59,10 @@ class FWD_J1(torch.autograd.Function):
         if not ctx.needs_input_grad[0]:
             dx = None
         else:
-            dx = torch.nn.functional.conv1d(pad_(dx_phi, h0, mode), h0)
+            dx = torch.nn.functional.conv1d(pad_(dx_phi, h0, mode), h0, groups = ch)
             if not skip_hps:
                 dx_psi = torch.stack((dx_psi_r, dx_psi_i), dim=-1).view(b, ch, T)
-                dx += torch.nn.functional.conv1d(pad_(dx_psi, h1, mode), h1)
+                dx += torch.nn.functional.conv1d(pad_(dx_psi, h1, mode), h1, groups = ch)
         return dx, None, None, None, None
 
 
