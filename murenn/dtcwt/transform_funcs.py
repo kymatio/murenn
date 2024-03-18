@@ -47,8 +47,8 @@ class FWD_J1(torch.autograd.Function):
             hi = torch.nn.functional.conv1d(
                 pad_(x, h1, padding_mode), h1_rep, groups=ch)
 
-        # Return low-pass (x_phi), real and imaginary part of high-pass (x_psi) 
-        return lo, hi[:,:,::2], hi[:,:,1::2]
+        # Return low-pass (x_phi), real and imaginary part of high-pass (x_psi)
+        return lo, hi[:, :, ::2], hi[:, :, 1::2]
     
     @staticmethod
     def backward(ctx, dx_phi, dx_psi_r, dx_psi_i):
@@ -59,10 +59,10 @@ class FWD_J1(torch.autograd.Function):
         if not ctx.needs_input_grad[0]:
             dx = None
         else:
-            dx = torch.nn.functional.conv1d(pad_(dx_phi, h0, mode), h0, groups = ch)
+            dx = torch.nn.functional.conv1d(pad_(dx_phi, h0, mode), h0, groups=ch)
             if not skip_hps:
                 dx_psi = torch.stack((dx_psi_r, dx_psi_i), dim=-1).view(b, ch, T)
-                dx += torch.nn.functional.conv1d(pad_(dx_psi, h1, mode), h1, groups = ch)
+                dx += torch.nn.functional.conv1d(pad_(dx_psi, h1, mode), h1, groups=ch)
         return dx, None, None, None, None
 
 
@@ -109,16 +109,16 @@ class FWD_J2PLUS(torch.autograd.Function):
         # Apply low-pass filtering on trees a (real) and b (imaginary).
         lo = coldfilt(x_phi, h0a_rep, h0b_rep, padding_mode)
         # 'lo' the low-pass output such that lo[2t]=lo_a[t] and lo[2t+1]=lo_b[t]
-        lo = torch.stack([lo[:,:ch], lo[:,ch:2*ch]], dim=-1).view(b, ch, T//2)
+        lo = torch.stack([lo[:, :ch], lo[:, ch:2*ch]], dim=-1).view(b, ch, T//2)
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
             bp_r = lo.new_zeros((b, ch, T//4))
             bp_i = lo.new_zeros((b, ch, T//4))
         else:
-            bp =  coldfilt(x_phi, h1a_rep, h1b_rep, padding_mode)
-            bp_r = bp[:,ch:2*ch]
-            bp_i = bp[:,:ch]
+            bp = coldfilt(x_phi, h1a_rep, h1b_rep, padding_mode)
+            bp_r = bp[:, ch:2*ch]
+            bp_i = bp[:, :ch]
 
         # Return low-pass output, and band-pass output in conjunction:
         # real part for tree a and imaginary part for tree b.
@@ -184,7 +184,7 @@ class INV_J1(torch.autograd.Function):
         # Mix low-pass and high-pass contributions
         x = x0 + x1
         return x
-    
+
     @staticmethod
     def backward(ctx, dx):
         g0, g1 = ctx.saved_tensors
@@ -199,11 +199,10 @@ class INV_J1(torch.autograd.Function):
             dhi = torch.nn.functional.conv1d(
                 pad_(dx, g1, padding_mode), g1, groups=ch)
             if ctx.needs_input_grad[1]:
-                dhi_r = dhi[:,:,::2]
+                dhi_r = dhi[:, :, ::2]
             if ctx.needs_input_grad[2]:
-                dhi_i = dhi[:,:,1::2]
+                dhi_i = dhi[:, :, 1::2]
         return dlo, dhi_r, dhi_i, None, None, None
-    
 
 
 class INV_J2PLUS(torch.autograd.Function):
@@ -257,7 +256,7 @@ class INV_J2PLUS(torch.autograd.Function):
         dlo, dbp = None, None
         if ctx.needs_input_grad[0]:
             dlo = coldfilt(dx, g0a, g0b, padding_mode)
-            dlo = torch.stack([dlo[:,:ch], dlo[:,ch:2*ch]], dim=-1).view(b, ch, T//2)
+            dlo = torch.stack([dlo[:, :ch], dlo[:, ch:2*ch]], dim=-1).view(b, ch, T//2)
             if normalize:
                 dlo *= np.sqrt(2)
             if ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
@@ -265,7 +264,8 @@ class INV_J2PLUS(torch.autograd.Function):
                 if normalize:
                     dbp *= np.sqrt(2)
                 if ctx.needs_input_grad[1]:
-                    dbp_r = dbp[:,ch:2*ch]
+                    dbp_r = dbp[:, ch:2*ch]
                 if ctx.needs_input_grad[2]:
-                    dbp_i = dbp[:,:ch]
+                    dbp_i = dbp[:, :ch]
         return dlo, dbp_r, dbp_i, None, None, None, None, None, None
+    

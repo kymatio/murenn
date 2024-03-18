@@ -1,8 +1,6 @@
 import pytest
 import torch
 from torch.autograd import gradcheck
-import numpy as np
-import dtcwt
 import murenn
 import murenn.dtcwt.transform_funcs as tf
 from contextlib import contextmanager

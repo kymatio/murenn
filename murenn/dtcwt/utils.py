@@ -18,6 +18,7 @@ def reflect(x, minx, maxx):
     out = torch.where(normed_mod >= rng, rng_by_2 - normed_mod, normed_mod) + minx
     return out.int()
 
+
 def pad_(x, h, padding_mode, same_pad = True):
     """
     Padding the input tensor x so that the later conv1d result have the same 
@@ -34,24 +35,26 @@ def pad_(x, h, padding_mode, same_pad = True):
     padding_right = padding_total//2 if same_pad else h.shape[-1]
 
     if padding_mode == 'symmetric':
-        l = x.shape[-1]
-        xe = reflect(torch.arange(-padding_left, l+padding_right, dtype=torch.int32), -0.5, l-0.5)
-        out = x[:,:,xe]
-    else: 
+        x_length = x.shape[-1]
+        xe = reflect(torch.arange(-padding_left, x_length+padding_right, dtype=torch.int32), -0.5, x_length-0.5)
+        out = x[:, :, xe]
+    else:
         out = torch.nn.functional.pad(x, (padding_left, padding_right), padding_mode)
     return out
+
 
 def mode_to_int(mode):
     if mode == 'symmetric':
         return 0
     elif mode == 'constant':
-        return 1 
+        return 1
     elif mode == 'replicate':
         return 2
     elif mode == 'circular':
         return 3
     else:
         raise ValueError("Unkown pad type: {}".format(mode))
+
 
 def int_to_mode(mode):
     if mode == 0:
@@ -64,3 +67,4 @@ def int_to_mode(mode):
         return 'circular'
     else:
         raise ValueError("Unkown pad type: {}".format(mode))
+    
