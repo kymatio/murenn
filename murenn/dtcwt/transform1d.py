@@ -15,8 +15,8 @@ class DTCWT(torch.nn.Module):
         skip_hps=False,
         include_scale=False,
         alternate_gh=True,
-        padding_mode='zeros',
-        normalize=True
+        padding_mode="zeros",
+        normalize=True,
     ):
         super().__init__()
         self.level1 = level1
@@ -29,20 +29,24 @@ class DTCWT(torch.nn.Module):
         if isinstance(skip_hps, (list, tuple, np.ndarray)):
             self.skip_hps = skip_hps
         else:
-            self.skip_hps = [skip_hps,] * self.J
-        
+            self.skip_hps = [
+                skip_hps,
+            ] * self.J
+
         # Parse the "include_scale" argument for including other low-pass
         # outputs in addition to the coarsest scale.
         if isinstance(include_scale, (list, tuple, np.ndarray)):
             self.include_scale = include_scale
         else:
-            self.include_scale = [include_scale,] * self.J
-        
-        if padding_mode == 'zeros':
-            self.padding_mode = 'constant'
+            self.include_scale = [
+                include_scale,
+            ] * self.J
+
+        if padding_mode == "zeros":
+            self.padding_mode = "constant"
         else:
             self.padding_mode = padding_mode
-        
+
         # Load first-level biorthogonal wavelet filters from disk.
         # h0o is the low-pass filter.
         # h1o is the high-pass filter.
@@ -73,6 +77,7 @@ class DTCWT(torch.nn.Module):
         self.register_buffer("g1a", prep_filt(g1a))
         self.register_buffer("g1b", prep_filt(g1b))
 
+
 class DTCWTDirect(DTCWT):
     """Performs a DTCWT forward decomposition of a PyTorch tensor containing
     1-D signals, potentially multichannel.
@@ -95,9 +100,9 @@ class DTCWTDirect(DTCWT):
         alternate_gh (bool): If True (default), alternates between filter pairs
             (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
             Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
-        padding_mode (str): One of 'zeros'(defalt), 'reflect', 'replicate', 
-            and 'circular'. Padding scheme for the filters. 
-        normalize (bool): If True (default), the output will be normalized by a 
+        padding_mode (str): One of 'zeros'(defalt), 'symmetric', 'replicate',
+            and 'circular'. Padding scheme for the filters.
+        normalize (bool): If True (default), the output will be normalized by a
             factor of 1/sqrt(2)
     """
 
@@ -112,8 +117,8 @@ class DTCWTDirect(DTCWT):
                 of wavelet scales (see documentation of DTCWTDirect constructor).
 
         Returns:
-            yl: low-pass coefficients. If include_scale is True (see DTCWTDirect 
-                constructor), yl is a list of low-pass coefficients at all wavelet 
+            yl: low-pass coefficients. If include_scale is True (see DTCWTDirect
+                constructor), yl is a list of low-pass coefficients at all wavelet
                 scales 1 to (J-1). Otherwise (default), yl is a real-valued PyTorch
                 tensor of shape `(B, C, T/2**(J-1))`.
             yh: band-pass coefficients. A list of PyTorch tensors with J elements,
@@ -127,11 +132,12 @@ class DTCWTDirect(DTCWT):
 
         # Assert that the length of x is a multiple of 2**J
         T = x.shape[-1]
-        assert T % (2 ** self.J) == 0
+        assert T % (2**self.J) == 0
 
         ## LEVEL 1 ##
         x_phi, x_psi_r, x_psi_i = FWD_J1.apply(
-            x, self.h0o, self.h1o, self.skip_hps[0], self.padding_mode)
+            x, self.h0o, self.h1o, self.skip_hps[0], self.padding_mode
+        )
         x_psis.append(x_psi_r + 1j * x_psi_i)
         if self.include_scale[0]:
             x_phis.append(x_phi)
@@ -141,18 +147,24 @@ class DTCWTDirect(DTCWT):
         ## LEVEL 2 AND GREATER ##
         # Apply multiresolution pyramid by looping over j from fine to coarse
         for j in range(1, self.J):
-            if (j%2 == 1) and self.alternate_gh:
+            if (j % 2 == 1) and self.alternate_gh:
                 # Pick the dual filters g0a, g1a, etc. instead of h0a, h1a, etc.
                 h0a, h1a, h0b, h1b = self.g0a, self.g1a, self.g0b, self.g1b
             else:
                 h0a, h1a, h0b, h1b = self.h0a, self.h1a, self.h0b, self.h1b
 
             x_phi, x_psi_r, x_psi_i = FWD_J2PLUS.apply(
-                x_phi, h0a, h1a, h0b, h1b, self.skip_hps[j], self.padding_mode, 
-                self.normalize
+                x_phi,
+                h0a,
+                h1a,
+                h0b,
+                h1b,
+                self.skip_hps[j],
+                self.padding_mode,
+                self.normalize,
             )
 
-            if (j%2 == 1) and self.alternate_gh:
+            if (j % 2 == 1) and self.alternate_gh:
                 # The result is anti-analytic in the Hilbert sense.
                 # We conjugate the result to bring the spectrum back to (0, pi).
                 # This is purely by convention and for consistency through j.
@@ -173,9 +185,11 @@ class DTCWTDirect(DTCWT):
             yl, yh = x_phi, x_psis
         return yl, yh
 
+
 class DTCWTInverse(DTCWT):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
     should be initialized in the same manner as DTCWTDirect.
+    The only supported padding mode is 'symmetric'.
 
     Args: should be the same as DTCWTDirect.
         level1 (str): One of 'antonini', 'legall', 'near_sym_a', 'near_sym_b'.
@@ -195,53 +209,90 @@ class DTCWTInverse(DTCWT):
         alternate_gh (bool): If True (default), alternates between filter pairs
             (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
             Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
-        padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate', 
-            and 'circular'. Padding scheme for the filters. 
-        normalize (bool): If True (default), the output will be normalized by a 
+        normalize (bool): If True (default), the output will be normalized by a
             factor of 1/sqrt(2)
     """
+
+    def __init__(
+        self,
+        level1="near_sym_a",
+        qshift="qshift_a",
+        J=8,
+        skip_hps=False,
+        include_scale=False,
+        alternate_gh=True,
+        padding_mode="symmetric",
+        normalize=True,
+    ):
+        if padding_mode != "symmetric":
+            raise NotImplementedError(
+                'Only padding_mode="symmetric" is supported. Got: {padding_mode}'
+            )
+        super().__init__(
+            level1=level1,
+            qshift=qshift,
+            J=J,
+            skip_hps=skip_hps,
+            include_scale=include_scale,
+            alternate_gh=alternate_gh,
+            padding_mode=padding_mode,
+            normalize=normalize,
+        )
 
     def forward(self, yl, yh):
         """
         Args:
             yl: low-pass coefficients for the DTCWT reconstruction. If include_scale
                 is True (see DTCWTInverse constructor), yl should be a list of low-pass
-                coefficients at all wavelet scales 1 to (J-1). Otherwise (default), 
+                coefficients at all wavelet scales 1 to (J-1). Otherwise (default),
                 yl should be a real-valued PyTorch tensor of shape `(B, C, T/2**(J-1))`.
             yh: band-pass coefficients for the DTCWT reconstruction. A list of PyTorch
                 tensors with J elements, containing the band-pass coefficients at all
-                wavelets scales 1 to (J-1). These tensors are complex-valued and must 
+                wavelets scales 1 to (J-1). These tensors are complex-valued and must
                 have shapes: `(B, C, T)`, `(B, C, T/2)`, `(B, C, T/4)`, etc.
         """
 
         # x_phi the low-pass, x_psis the band-pass
         if True in self.include_scale:
-            x_phi, x_psis = yl[self.J-1], yh
+            x_phi, x_psis = yl[self.J - 1], yh
         else:
             x_phi, x_psis = yl, yh
-        
+
         # Assert that the band-pass sequence has the same length as the
         # level of decomposition
         assert len(x_psis) == self.J
-        
+
         ## LEVEL 2 AND GREATER ##
-        for j in range(self.J-1, 0, -1):
+        for j in range(self.J - 1, 0, -1):
             # The band-pass coefficients at level j
             # Check the length of the band-pass, low-pass input coefficients
             x_psi = x_psis[j]
-            assert x_psi.shape[-1] * 2 == x_phi.shape[-1], f'J={j}\n{x_psi.shape[-1]*2}\n{x_phi.shape[-1]}'
-            if (j%2 == 1) and self.alternate_gh:
+            assert (
+                x_psi.shape[-1] * 2 == x_phi.shape[-1]
+            ), f"J={j}\n{x_psi.shape[-1]*2}\n{x_phi.shape[-1]}"
+            if (j % 2 == 1) and self.alternate_gh:
                 x_psi = torch.conj(x_psi)
                 g0a, g1a, g0b, g1b = self.h0a, self.h1a, self.h0b, self.h1b
             else:
-                g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b   
-            
+                g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b
+
             x_psi_r, x_psi_i = x_psi.real, x_psi.imag
-            x_phi = INV_J2PLUS.apply(x_phi, x_psi_r, x_psi_i, g0a, g1a, g0b, g1b, self.padding_mode, 
-                self.normalize)
+            x_phi = INV_J2PLUS.apply(
+                x_phi,
+                x_psi_r,
+                x_psi_i,
+                g0a,
+                g1a,
+                g0b,
+                g1b,
+                self.padding_mode,
+                self.normalize,
+            )
 
         ## LEVEL 1 ##
         x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
-        x_phi = INV_J1.apply(x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode)
-        
+        x_phi = INV_J1.apply(
+            x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode
+        )
+
         return x_phi
