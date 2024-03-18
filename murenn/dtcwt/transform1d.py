@@ -95,7 +95,7 @@ class DTCWTDirect(DTCWT):
         alternate_gh (bool): If True (default), alternates between filter pairs
             (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
             Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
-        padding_mode (str): One of 'zeros'(defalt), 'reflect', 'replicate', 
+        padding_mode (str): One of 'zeros'(defalt), 'symmetric', 'replicate', 
             and 'circular'. Padding scheme for the filters. 
         normalize (bool): If True (default), the output will be normalized by a 
             factor of 1/sqrt(2)
@@ -176,7 +176,8 @@ class DTCWTDirect(DTCWT):
 class DTCWTInverse(DTCWT):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
     should be initialized in the same manner as DTCWTDirect.
-
+    The only supported padding mode is 'symmetric'.
+    
     Args: should be the same as DTCWTDirect.
         level1 (str): One of 'antonini', 'legall', 'near_sym_a', 'near_sym_b'.
             Specifies the first-level biorthogonal wavelet filters.
@@ -195,8 +196,6 @@ class DTCWTInverse(DTCWT):
         alternate_gh (bool): If True (default), alternates between filter pairs
             (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
             Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
-        padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate', 
-            and 'circular'. Padding scheme for the filters. 
         normalize (bool): If True (default), the output will be normalized by a 
             factor of 1/sqrt(2)
     """
