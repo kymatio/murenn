@@ -117,3 +117,32 @@ def test_autograd(alternate_gh, normalize):
 
     assert torch.allclose(g, dirac, atol=1e-3)
     assert x.grad.shape == (b, ch, N)
+
+
+def test_down_j1():
+    J = 1
+    eps = 1e-3
+    atol = 1e-4
+    with set_double_precision():
+        x = torch.randn(2, 3, 2**3, device=dev, requires_grad=True)
+        down = murenn.Downsampling(J=J).to(dev)
+    input = (x, down.h0o, down.padding_mode)
+    gradcheck(tf.DOWN_J1.apply, input, eps=eps, atol=atol)
+
+
+@pytest.mark.parametrize("normalize", [True, False])
+def test_down_j2(normalize):
+    J = 2
+    eps = 1e-3
+    atol = 1e-4
+    with set_double_precision():
+        x = torch.randn(2, 3, 2**3, device=dev, requires_grad=True)
+        down = murenn.Downsampling(J=J, normalize=normalize).to(dev)
+    input = (
+        x,
+        down.h0a,
+        down.h0b,
+        down.padding_mode,
+        down.normalize,
+    )
+    gradcheck(tf.DOWN_J2PLUS.apply, input, eps=eps, atol=atol)

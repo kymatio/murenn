@@ -3,7 +3,7 @@ import dtcwt
 import torch.nn
 
 from murenn.dtcwt.lowlevel import prep_filt
-from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
+from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS, DOWN_J1, DOWN_J2PLUS
 
 
 class DTCWT(torch.nn.Module):
@@ -296,3 +296,65 @@ class DTCWTInverse(DTCWT):
         )
 
         return x_phi
+
+class Downsampling(DTCWT):
+    def forward(self, x):
+        """Forward Dual-Tree Complex Wavelet Transform (DTCWT) of a 1-D signal.
+
+        Args:
+            x (PyTorch tensor): Input data. Should be a tensor of shape
+                `(B, C, T)` where B is the batch size, C is the number of
+                channels and T is the number of time samples.
+                Note that T must be a multiple of 2**J, where J is the number
+                of wavelet scales (see documentation of DTCWTDirect constructor).
+
+        Returns:
+            yl: low-pass coefficients. A list of PyTorch tensors with J elements,
+                containing the low-pass coefficients at all wavelets scales 1 to
+                (J-1). These tensors are complex-valued and have shapes:
+                `(B, C, T)`, `(B, C, T/2)`, `(B, C, T/4)`, etc."""
+
+        # Initialize lists of empty arrays with same dtype as input
+        yl = []
+
+        # Assert that the length of x is a multiple of 2**J
+        B, C, T = x.shape
+        assert T % (2**self.J) == 0
+
+        ## LEVEL 1 ##
+        if not self.include_scale[0]:
+            yl.append(x.new_zeros((B, C, T//2)) + 1j * x.new_zeros((B, C, T//2)))
+        else:
+            x_phi = DOWN_J1.apply(x, self.h0o, self.padding_mode)
+            yl.append(x_phi[:, :, ::2] + 1j * x_phi[:, :, 1::2])
+
+        ## LEVEL 2 AND GREATER ##
+        # Apply multiresolution pyramid by looping over j from fine to coarse
+        for j in range(1, self.J):
+            if (j % 2 == 1) and self.alternate_gh:
+                # Pick the dual filters g0a, g0b, instead of h0a, h0b
+                h0a, h0b = self.g0a, self.g0b
+            else:
+                h0a, h0b = self.h0a, self.h0b
+            if not self.include_scale[j]:
+                T = x_phi.shape[-1]
+                yl.append(x_phi.new_zeros((B, C, T//2)) + 1j * x_phi.new_zeros((B, C, T//2)))
+            else:
+                x_phi = DOWN_J2PLUS.apply(
+                    x_phi,
+                    h0a,
+                    h0b,
+                    self.padding_mode,
+                    self.normalize,
+                )
+                if h0a.shape[-1]//2 % 2 == 0:
+                    x_phi_a = x_phi[:, :, ::2]
+                    x_phi_b = x_phi[:, :, 1::2]
+                else:
+                    x_phi_a = x_phi[:, :, 1::2]
+                    x_phi_b = x_phi[:, :, ::2]
+                if (j % 2 == 1) and self.alternate_gh:
+                    yl.append(x_phi_b - 1j * x_phi_a)
+                else:
+                    yl.append(x_phi_b + 1j * x_phi_a)
+        return yl

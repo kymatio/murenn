@@ -73,3 +73,24 @@ def test_skip_hps(skip_hps, include_scale):
     inv = murenn.DTCWTInverse(J=J, skip_hps=skip_hps, include_scale=include_scale)
     X_rec = inv(lp, bp)
     assert X_rec.shape == Xt.shape
+
+
+@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("J", list(range(1, 10)))
+def test_downsampling_same(J, normalize):
+    Xt = torch.randn(2, 2, 2**J)
+
+    kwargs = dict(J=J,
+                  alternate_gh=False, # need to be verified
+                  include_scale=True,
+                  normalize=normalize,
+                )
+    fwd = murenn.DTCWTDirect(**kwargs)
+    down = murenn.Downsampling(**kwargs)
+
+    phis, _ = fwd(Xt)
+    yls = down(Xt)
+
+    for phi, yl in zip(phis, yls):
+        lp_fwd = phi[:, :, ::2] + 1j * phi[:, :, 1::2]
+        torch.testing.assert_close(lp_fwd, yl, rtol=0, atol=0)

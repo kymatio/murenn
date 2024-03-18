@@ -8,11 +8,11 @@ framework.
 """
 
 # List of top-level public names.
-__all__ = ["DTCWT", "DTCWTDirect", "DTCWTInverse"]
+__all__ = ["DTCWT", "DTCWTDirect", "DTCWTInverse", "Downsampling"]
 
 
 # Submodule imports
-from .dtcwt.transform1d import DTCWTDirect, DTCWTInverse
+from .dtcwt.transform1d import DTCWTDirect, DTCWTInverse, Downsampling
 from .version import version as __version__
 
 # PytW-like aliases

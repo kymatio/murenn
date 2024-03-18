@@ -268,4 +268,68 @@ class INV_J2PLUS(torch.autograd.Function):
                 if ctx.needs_input_grad[2]:
                     dbp_i = dbp[:, :ch]
         return dlo, dbp_r, dbp_i, None, None, None, None, None, None
-    
+
+
+class DOWN_J1(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, h0, padding_mode):
+        # Replicate filters along the channel dimension
+        ch = x.shape[1]
+        h0_rep = h0.repeat(ch, 1, 1)
+        ctx.save_for_backward(h0_rep)
+        ctx.mode = mode_to_int(padding_mode)
+
+        # Apply low-pass filtering
+        lo = torch.nn.functional.conv1d(
+            pad_(x, h0, padding_mode), h0_rep, groups=ch)
+
+        # Return low-pass coefficients
+        return lo
+
+    @staticmethod
+    def backward(ctx, dx_phi):
+        h0, = ctx.saved_tensors
+        mode = int_to_mode(ctx.mode)
+        ch = dx_phi.shape[1]
+        if not ctx.needs_input_grad[0]:
+            dx = None
+        else:
+            dx = torch.nn.functional.conv1d(pad_(dx_phi, h0, mode), h0, groups=ch)
+        return dx, None, None, None
+
+
+class DOWN_J2PLUS(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, x_phi, h0a, h0b, padding_mode, normalize):
+        # Replicate filters along the channel dimension
+        b, ch, T = x_phi.shape
+        h0a_rep = h0a.repeat(ch, 1, 1)
+        h0b_rep = h0b.repeat(ch, 1, 1)
+        ctx.save_for_backward(h0a_rep, h0b_rep)
+        ctx.mode = mode_to_int(padding_mode)
+        ctx.normalize = normalize
+
+        # Apply low-pass filtering on trees a (real) and b (imaginary).
+        lo = coldfilt(x_phi, h0a_rep, h0b_rep, padding_mode)
+        # 'lo' the low-pass output such that lo[2t]=lo_a[t] and lo[2t+1]=lo_b[t]
+        lo = torch.stack([lo[:, :ch], lo[:, ch:2*ch]], dim=-1).view(b, ch, T//2)
+
+        # Return low-pass output
+        if normalize:
+            return 1/np.sqrt(2) * lo
+        else:
+            return lo
+
+    @staticmethod
+    def backward(ctx, dx_phi):
+        g0b, g0a = ctx.saved_tensors
+        padding_mode = int_to_mode(ctx.mode)
+        normalize = ctx.normalize
+        if not ctx.needs_input_grad[0]:
+            dx = None
+        else:
+            dx = colifilt(dx_phi, g0a, g0b, padding_mode)
+            if normalize:
+                dx *= 1/np.sqrt(2)
+        return dx, None, None, None, None, None
