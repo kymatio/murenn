@@ -68,21 +68,25 @@ def test_inv(level1, qshift, J, alternate_gh, normalize):
 def test_skip_hps(skip_hps, include_scale):
     J = 3
     Xt = torch.randn(2, 2, 2**J)
-    xfm_murenn = murenn.DTCWTDirect(J=J, skip_hps=skip_hps, include_scale=include_scale)
+
+    kwargs = dict(J=J, skip_hps=skip_hps, include_scale=include_scale)
+    xfm_murenn = murenn.DTCWTDirect(**kwargs)
+    inv = murenn.DTCWTInverse(**kwargs)
+
     lp, bp = xfm_murenn(Xt)
-    inv = murenn.DTCWTInverse(J=J, skip_hps=skip_hps, include_scale=include_scale)
     X_rec = inv(lp, bp)
     assert X_rec.shape == Xt.shape
 
 
+@pytest.mark.parametrize("include_scale", [True, [0, 0, 1]])
 @pytest.mark.parametrize("normalize", [True, False])
-@pytest.mark.parametrize("J", list(range(1, 10)))
-def test_downsampling_same(J, normalize):
+def test_downsampling_same(normalize, include_scale):
+    J = 3
     Xt = torch.randn(2, 2, 2**J)
 
     kwargs = dict(J=J,
                   alternate_gh=False, # need to be verified
-                  include_scale=True,
+                  include_scale=include_scale,
                   normalize=normalize,
                 )
     fwd = murenn.DTCWTDirect(**kwargs)

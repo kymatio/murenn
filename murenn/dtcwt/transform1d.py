@@ -322,11 +322,20 @@ class Downsampling(DTCWT):
         assert T % (2**self.J) == 0
 
         ## LEVEL 1 ##
-        if not self.include_scale[0]:
-            yl.append(x.new_zeros((B, C, T//2)) + 1j * x.new_zeros((B, C, T//2)))
+        x_phi = DOWN_J1.apply(x, self.h0o, self.padding_mode)
+
+        if self.include_scale[0]:
+            if self.h0a.shape[-1]//2 % 2 == 0:
+                x_phi_a = x_phi[:, :, ::2]
+                x_phi_b = x_phi[:, :, 1::2]
+            else:
+                x_phi_a = x_phi[:, :, 1::2]
+                x_phi_b = x_phi[:, :, ::2]
+            yl.append(x_phi_b + 1j * x_phi_a)
+
         else:
-            x_phi = DOWN_J1.apply(x, self.h0o, self.padding_mode)
-            yl.append(x_phi[:, :, ::2] + 1j * x_phi[:, :, 1::2])
+            T = x_phi.shape[-1]
+            yl.append(x_phi.new_zeros((B, C, T//2)) + 1j * x.new_zeros((B, C, T//2)))
 
         ## LEVEL 2 AND GREATER ##
         # Apply multiresolution pyramid by looping over j from fine to coarse
@@ -336,25 +345,30 @@ class Downsampling(DTCWT):
                 h0a, h0b = self.g0a, self.g0b
             else:
                 h0a, h0b = self.h0a, self.h0b
-            if not self.include_scale[j]:
-                T = x_phi.shape[-1]
-                yl.append(x_phi.new_zeros((B, C, T//2)) + 1j * x_phi.new_zeros((B, C, T//2)))
-            else:
-                x_phi = DOWN_J2PLUS.apply(
-                    x_phi,
-                    h0a,
-                    h0b,
-                    self.padding_mode,
-                    self.normalize,
-                )
+
+            x_phi = DOWN_J2PLUS.apply(
+                x_phi,
+                h0a,
+                h0b,
+                self.padding_mode,
+                self.normalize,
+            )
+
+            if self.include_scale[j]:
                 if h0a.shape[-1]//2 % 2 == 0:
                     x_phi_a = x_phi[:, :, ::2]
                     x_phi_b = x_phi[:, :, 1::2]
                 else:
                     x_phi_a = x_phi[:, :, 1::2]
                     x_phi_b = x_phi[:, :, ::2]
+
                 if (j % 2 == 1) and self.alternate_gh:
                     yl.append(x_phi_b - 1j * x_phi_a)
                 else:
                     yl.append(x_phi_b + 1j * x_phi_a)
+
+            else:
+                T = x_phi.shape[-1]
+                yl.append(x_phi.new_zeros((B, C, T//2)) + 1j * x_phi.new_zeros((B, C, T//2)))
+
         return yl
