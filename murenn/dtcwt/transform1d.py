@@ -200,6 +200,29 @@ class DTCWTInverse(DTCWT):
         normalize (bool): If True (default), the output will be normalized by a 
             factor of 1/sqrt(2)
     """
+    def __init__(
+        self,
+        level1="near_sym_a",
+        qshift="qshift_a",
+        J=8,
+        skip_hps=False,
+        include_scale=False,
+        alternate_gh=True,
+        padding_mode='symmetric',
+        normalize=True
+    ):
+        if padding_mode != 'symmetric':
+            raise NotImplementedError('Only padding_mode="symmetric" is supported. Got: {padding_mode}')
+        super().__init__(
+            level1=level1,
+            qshift=qshift,
+            J=J,
+            skip_hps=skip_hps,
+            include_scale=include_scale,
+            alternate_gh=alternate_gh,
+            padding_mode=padding_mode,
+            normalize=normalize
+        )
 
     def forward(self, yl, yh):
         """
