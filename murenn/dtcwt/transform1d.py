@@ -15,7 +15,7 @@ class DTCWT(torch.nn.Module):
         skip_hps=False,
         include_scale=False,
         alternate_gh=True,
-        padding_mode="zeros",
+        padding_mode="symmetric",
         normalize=True,
     ):
         super().__init__()
@@ -299,20 +299,6 @@ class DTCWTInverse(DTCWT):
 
 class Downsampling(DTCWT):
     def forward(self, x):
-        """Forward Dual-Tree Complex Wavelet Transform (DTCWT) of a 1-D signal.
-
-        Args:
-            x (PyTorch tensor): Input data. Should be a tensor of shape
-                `(B, C, T)` where B is the batch size, C is the number of
-                channels and T is the number of time samples.
-                Note that T must be a multiple of 2**J, where J is the number
-                of wavelet scales (see documentation of DTCWTDirect constructor).
-
-        Returns:
-            yl: low-pass coefficients. A list of PyTorch tensors with J elements,
-                containing the low-pass coefficients at all wavelets scales 1 to
-                (J-1). These tensors are complex-valued and have shapes:
-                `(B, C, T)`, `(B, C, T/2)`, `(B, C, T/4)`, etc."""
 
         # Initialize lists of empty arrays with same dtype as input
         yl = []
