@@ -300,7 +300,7 @@ class DTCWTInverse(DTCWT):
 class Downsampling(DTCWT):
     def forward(self, x):
 
-        # Initialize lists of empty arrays with same dtype as input
+        # Initialize an empty list
         yl = []
 
         # Assert that the length of x is a multiple of 2**J
@@ -311,15 +311,19 @@ class Downsampling(DTCWT):
         x_phi = DOWN_J1.apply(x, self.h0o, self.padding_mode)
 
         if self.include_scale[0]:
+            # The odd(even) samples will be passed to tree a(tree b), depending
+            # on the padding extension length of the next level
             if self.h0a.shape[-1]//2 % 2 == 0:
                 x_phi_a = x_phi[:, :, ::2]
                 x_phi_b = x_phi[:, :, 1::2]
             else:
                 x_phi_a = x_phi[:, :, 1::2]
                 x_phi_b = x_phi[:, :, ::2]
+            # Tree a represents the imaginary part, tree b represents the real part
             yl.append(x_phi_b + 1j * x_phi_a)
 
         else:
+            # Create a zero valued tensor if lowpass at level 1 is not included
             T = x_phi.shape[-1]
             yl.append(x_phi.new_zeros((B, C, T//2)) + 1j * x.new_zeros((B, C, T//2)))
 
@@ -341,6 +345,8 @@ class Downsampling(DTCWT):
             )
 
             if self.include_scale[j]:
+                # The odd(even) samples will be passed to tree a(tree b),
+                # depending on the padding extension length of the next level
                 if h0a.shape[-1]//2 % 2 == 0:
                     x_phi_a = x_phi[:, :, ::2]
                     x_phi_b = x_phi[:, :, 1::2]
