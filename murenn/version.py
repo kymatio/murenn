@@ -14,4 +14,4 @@
 # Dev branch marker is: 'X.Y.dev' or 'X.Y.devN' where N is an integer.
 # 'X.Y.dev0' is the canonical version of 'X.Y.dev'
 #
-version = "0.2.dev0"
+version = "0.3.dev0"
