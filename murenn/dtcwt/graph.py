@@ -13,7 +13,7 @@ class MURENN_GRAPH(torch.nn.Module):
         super().__init__()
         self.J = J
         self.Q = Q
-        self.T = 16
+        self.T = T
         self.padding_mode = padding_mode
         self.dtcwt = murenn.DTCWT(
             J=self.J,
@@ -22,7 +22,6 @@ class MURENN_GRAPH(torch.nn.Module):
 
 
     def forward(self, x):
-
         _, bps = self.dtcwt(x)
         ys = []
         C = bps[0].shape[1]
@@ -46,6 +45,6 @@ class MURENN_GRAPH(torch.nn.Module):
             y_j, _ = down(conv1d(torch.abs(bps[j])))
             ys.append(y_j)
 
-        ys = torch.stack(ys, dim=1)
+        ys = torch.stack(ys, dim=2) #B*C*J*N
 
         return ys
