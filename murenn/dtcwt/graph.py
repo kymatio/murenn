@@ -35,16 +35,17 @@ class MURENN_GRAPH(torch.nn.Module):
 
             conv1d = torch.nn.Conv1d(
                 in_channels=C,
-                out_channels=self.Q,
+                out_channels=self.Q*C,
                 kernel_size=self.T,
                 bias=False,
+                groups=C,
                 padding="same",
             )
             torch.nn.init.normal_(conv1d.weight) #std?
 
-            y_j, _ = down(conv1d(torch.abs(bps[j])))
+            y_j, _ = down(conv1d(torch.abs(bps[j])))#B*(C*Q)*N
             ys.append(y_j)
 
-        ys = torch.stack(ys, dim=2) #B*C*J*N
+        ys = torch.stack(ys, dim=2) #B*(C*Q)*J*N
 
         return ys

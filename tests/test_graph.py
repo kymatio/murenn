@@ -17,4 +17,4 @@ def test_shape(J, Q, T, padding_mode):
         padding_mode=padding_mode,
     )
     y = graph(x)
-    assert y.shape == (B, Q, J, 2**4)
+    assert y.shape == (B, C*Q, J, 2**4)
