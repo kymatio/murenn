@@ -8,7 +8,7 @@ class MuReNNDirect(torch.nn.Module):
         J (int): Number of levels of DTCWT decomposition.
         Q (int): Number of Conv1D filters at each level.
         in_channels (int): Number of channels in the input signal.
-        padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate',
+        padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
     """
     def __init__(self, *, J, Q, T, in_channels, padding_mode="symmetric"):
