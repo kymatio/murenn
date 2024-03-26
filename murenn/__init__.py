@@ -14,7 +14,7 @@ __all__ = ["DTCWT", "DTCWTDirect", "DTCWTInverse"]
 # Submodule imports
 from .dtcwt.transform1d import DTCWTDirect, DTCWTInverse
 from .version import version as __version__
-from .dtcwt.graph import MURENN_GRAPH
+from .dtcwt.graph import MuReNNDirect
 
 # PytW-like aliases
 DTCWT = DTCWTDirect
