@@ -3,10 +3,18 @@ import murenn
 
 
 class MuReNNDirect(torch.nn.Module):
+    """
+    Args:
+        J (int): Number of levels of DTCWT decomposition.
+        Q (int): Number of Conv1D filters at each level.
+        in_channels (int): Number of channels in the input signal.
+        padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate',
+            and 'circular'. Padding scheme for the DTCWT decomposition.
+    """
     def __init__(self, *, J, Q, T, in_channels, padding_mode="symmetric"):
         super().__init__()
         self.Q = Q
-        self.ch = in_channels
+        self.C = in_channels
         self.down = []
         self.conv1d = []
         self.dtcwt = murenn.DTCWT(
@@ -35,7 +43,18 @@ class MuReNNDirect(torch.nn.Module):
 
 
     def forward(self, x):
-        assert self.ch == x.shape[1]
+        """
+        Args:
+            x (PyTorch tensor): Input data. Should be a tensor of shape
+                `(B, C, T)` where B is the batch size, C is the number of
+                channels and T is the number of time samples.
+                Note that T must be a multiple of 2**J, where J is the number
+                of wavelet scales (see documentation of MuReNNDirect constructor).
+
+        Returns:
+            y (PyTorch tensor): A tensor of shape `(B, C, Q, J, T/(2**J))`
+        """
+        assert self.C == x.shape[1]
         _, bps = self.dtcwt(x)
         ys = []
 
@@ -45,8 +64,9 @@ class MuReNNDirect(torch.nn.Module):
             y_j, _ = self.down[j](x_j)
 
             B, _, N = y_j.shape
-            y_j = y_j.view(B, self.ch, self.Q, N)
+            # reshape from (B, C*Q, N) to (B, C, Q, N)
+            y_j = y_j.view(B, self.C, self.Q, N)
             ys.append(y_j)
 
-        y = torch.stack(ys, dim=3) #shape: (B, ch, Q, J, N/(2**J))
+        y = torch.stack(ys, dim=3)
         return y
