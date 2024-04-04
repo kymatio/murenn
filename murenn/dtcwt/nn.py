@@ -59,9 +59,10 @@ class MuReNNDirect(torch.nn.Module):
         ys = []
 
         for j in range(self.dtcwt.J):
-            x_j = torch.abs(bps[j])
-            x_j = self.conv1d[j](x_j)
-            y_j, _ = self.down[j](x_j)
+            Wx_r = self.conv1d[j](bps[j].real)
+            Wx_i = self.conv1d[j](bps[j].imag)
+            Ux = Wx_r ** 2 + Wx_i ** 2
+            y_j, _ = self.down[j](Ux)
 
             B, _, N = y_j.shape
             # reshape from (B, C*Q, N) to (B, C, Q, N)
