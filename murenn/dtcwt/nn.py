@@ -15,22 +15,22 @@ class MuReNNDirect(torch.nn.Module):
         super().__init__()
         self.Q = Q
         self.C = in_channels
-        self.down = []
-        self.conv1d = []
+        down = []
+        conv1d = []
         self.dtcwt = murenn.DTCWT(
             J=J,
             padding_mode=padding_mode,
         )
 
         for j in range(J):
-            down = murenn.DTCWT(
+            down_j = murenn.DTCWT(
                 J=J-j,
                 padding_mode=padding_mode,
                 skip_hps=True,
             )
-            self.down.append(down)
+            down.append(down_j)
 
-            conv1d = torch.nn.Conv1d(
+            conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=Q*in_channels,
                 kernel_size=T,
@@ -38,8 +38,10 @@ class MuReNNDirect(torch.nn.Module):
                 groups=in_channels,
                 padding="same",
             )
-            torch.nn.init.normal_(conv1d.weight)
-            self.conv1d.append(conv1d)
+            torch.nn.init.normal_(conv1d_j.weight)
+            conv1d.append(conv1d_j)
+        self.down = torch.nn.ModuleList(down)
+        self.conv1d = torch.nn.ParameterList(conv1d)
 
 
     def forward(self, x):
