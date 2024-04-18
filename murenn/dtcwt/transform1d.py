@@ -113,26 +113,25 @@ class DTCWTDirect(DTCWT):
             x (PyTorch tensor): Input data. Should be a tensor of shape
                 `(B, C, T)` where B is the batch size, C is the number of
                 channels and T is the number of time samples.
-                Note that T must be a multiple of 2**J, where J is the number
-                of wavelet scales (see documentation of DTCWTDirect constructor).
+                Note that T must be even length.
 
         Returns:
             yl: low-pass coefficients. If include_scale is True (see DTCWTDirect
                 constructor), yl is a list of low-pass coefficients at all wavelet
                 scales 1 to (J-1). Otherwise (default), yl is a real-valued PyTorch
-                tensor of shape `(B, C, T/2**(J-1))`.
+                tensor.
             yh: band-pass coefficients. A list of PyTorch tensors with J elements,
                 containing the band-pass coefficients at all wavelets scales 1 to
-                (J-1). These tensors are complex-valued and have shapes:
-                `(B, C, T)`, `(B, C, T/2)`, `(B, C, T/4)`, etc."""
+                (J-1). These tensors are complex-valued."""
 
         # Initialize lists of empty arrays with same dtype as input
         x_phis = []
         x_psis = []
 
-        # Assert that the length of x is a multiple of 2**J
+        # Extend if the length of x is not even
         T = x.shape[-1]
-        assert T % (2**self.J) == 0
+        if T % 2 != 0:
+            x = torch.cat((x, x[:,:,-1:]), dim=-1)
 
         ## LEVEL 1 ##
         x_phi, x_psi_r, x_psi_i = FWD_J1.apply(
@@ -152,6 +151,10 @@ class DTCWTDirect(DTCWT):
                 h0a, h1a, h0b, h1b = self.g0a, self.g1a, self.g0b, self.g1b
             else:
                 h0a, h1a, h0b, h1b = self.h0a, self.h1a, self.h0b, self.h1b
+
+            # Ensure the lowpass is divisible by 4
+            if x_phi.shape[-1] % 4 != 0:
+                x_phi = torch.cat((x_phi[:,:,0:1], x_phi, x_phi[:,:,-1:]), dim=-1)
 
             x_phi, x_psi_r, x_psi_i = FWD_J2PLUS.apply(
                 x_phi,
@@ -245,11 +248,10 @@ class DTCWTInverse(DTCWT):
             yl: low-pass coefficients for the DTCWT reconstruction. If include_scale
                 is True (see DTCWTInverse constructor), yl should be a list of low-pass
                 coefficients at all wavelet scales 1 to (J-1). Otherwise (default),
-                yl should be a real-valued PyTorch tensor of shape `(B, C, T/2**(J-1))`.
+                yl should be a real-valued PyTorch tensor.
             yh: band-pass coefficients for the DTCWT reconstruction. A list of PyTorch
                 tensors with J elements, containing the band-pass coefficients at all
-                wavelets scales 1 to (J-1). These tensors are complex-valued and must
-                have shapes: `(B, C, T)`, `(B, C, T/2)`, `(B, C, T/4)`, etc.
+                wavelets scales 1 to (J-1). These tensors are complex-valued.
         """
 
         # x_phi the low-pass, x_psis the band-pass
@@ -267,9 +269,13 @@ class DTCWTInverse(DTCWT):
             # The band-pass coefficients at level j
             # Check the length of the band-pass, low-pass input coefficients
             x_psi = x_psis[j]
+
+            if x_phi.shape[-1] != x_psi.shape[-1] * 2:
+                x_phi = x_phi[:,:,1:-1]
             assert (
                 x_psi.shape[-1] * 2 == x_phi.shape[-1]
             ), f"J={j}\n{x_psi.shape[-1]*2}\n{x_phi.shape[-1]}"
+
             if (j % 2 == 1) and self.alternate_gh:
                 x_psi = torch.conj(x_psi)
                 g0a, g1a, g0b, g1b = self.h0a, self.h1a, self.h0b, self.h1b
@@ -291,8 +297,8 @@ class DTCWTInverse(DTCWT):
 
         ## LEVEL 1 ##
         x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
+
         x_phi = INV_J1.apply(
             x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode
         )
-
         return x_phi

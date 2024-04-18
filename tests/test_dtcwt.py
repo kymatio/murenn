@@ -8,8 +8,8 @@ import murenn
 @pytest.mark.parametrize("J", list(range(1, 10)))
 def test_fwd_same(J):
     decimal = 4
-    X = np.random.rand(2**J)
-    Xt = torch.tensor(X, dtype=torch.get_default_dtype()).view(1, 1, 2**J)
+    X = np.random.rand(44100)
+    Xt = torch.tensor(X, dtype=torch.get_default_dtype()).view(1, 1, 44100)
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
         alternate_gh=False,
@@ -38,8 +38,9 @@ def test_fwd_same(J):
 @pytest.mark.parametrize("alternate_gh", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("J", list(range(1, 5)))
-def test_inv(level1, qshift, J, alternate_gh, normalize):
-    Xt = torch.randn(2, 2, 2**J)
+@pytest.mark.parametrize("T", [44099, 44100])
+def test_inv(level1, qshift, J, T, alternate_gh, normalize):
+    Xt = torch.randn(2, 2, T)
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
         level1=level1,
@@ -60,6 +61,8 @@ def test_inv(level1, qshift, J, alternate_gh, normalize):
         normalize=normalize,
     )
     X_rec = inv(lp, bp)
+    if  T % 2 != 0:
+        X_rec = X_rec[:, :, :-1]
     torch.testing.assert_close(Xt, X_rec)
 
 
@@ -67,7 +70,7 @@ def test_inv(level1, qshift, J, alternate_gh, normalize):
 @pytest.mark.parametrize("skip_hps", [False, [0, 1, 0]])
 def test_skip_hps(skip_hps, include_scale):
     J = 3
-    Xt = torch.randn(2, 2, 2**J)
+    Xt = torch.randn(2, 2, 44100)
     xfm_murenn = murenn.DTCWTDirect(J=J, skip_hps=skip_hps, include_scale=include_scale)
     lp, bp = xfm_murenn(Xt)
     inv = murenn.DTCWTInverse(J=J, skip_hps=skip_hps, include_scale=include_scale)
