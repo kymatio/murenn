@@ -40,8 +40,6 @@ class MuReNNDirect(torch.nn.Module):
             )
             torch.nn.init.normal_(conv1d_j.weight)
             self.conv1d.append(conv1d_j)
-        # self.down = torch.nn.ModuleList(down)
-        # self.conv1d = torch.nn.ParameterList(conv1d)
 
 
     def forward(self, x):
