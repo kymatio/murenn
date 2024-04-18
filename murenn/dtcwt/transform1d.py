@@ -128,9 +128,10 @@ class DTCWTDirect(DTCWT):
         x_phis = []
         x_psis = []
 
-        # Assert that the length of x is even
+        # Extend if the length of x is not even
         T = x.shape[-1]
-        assert T % 2 == 0
+        if T % 2 != 0:
+            x = torch.cat((x, x[:,:,-1:]), dim=-1)
 
         ## LEVEL 1 ##
         x_phi, x_psi_r, x_psi_i = FWD_J1.apply(
@@ -300,5 +301,4 @@ class DTCWTInverse(DTCWT):
         x_phi = INV_J1.apply(
             x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode
         )
-
         return x_phi

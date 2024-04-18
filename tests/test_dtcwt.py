@@ -38,8 +38,9 @@ def test_fwd_same(J):
 @pytest.mark.parametrize("alternate_gh", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("J", list(range(1, 5)))
-def test_inv(level1, qshift, J, alternate_gh, normalize):
-    Xt = torch.randn(2, 2, 44100)
+@pytest.mark.parametrize("T", [44099, 44100])
+def test_inv(level1, qshift, J, T, alternate_gh, normalize):
+    Xt = torch.randn(2, 2, T)
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
         level1=level1,
@@ -60,6 +61,8 @@ def test_inv(level1, qshift, J, alternate_gh, normalize):
         normalize=normalize,
     )
     X_rec = inv(lp, bp)
+    if  T % 2 != 0:
+        X_rec = X_rec[:, :, :-1]
     torch.testing.assert_close(Xt, X_rec)
 
 

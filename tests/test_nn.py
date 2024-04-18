@@ -7,9 +7,10 @@ import murenn
 @pytest.mark.parametrize("Q", [3, 4])
 @pytest.mark.parametrize("T", [8, 16])
 @pytest.mark.parametrize("padding_mode", ["symmetric", "zeros"])
-def test_direct_shape(J, Q, T, padding_mode):
-    B, C, N = 2, 3, 2**(J+4)
-    x = torch.zeros(B, C, N)
+@pytest.mark.parametrize("N", list(range(10)))
+def test_direct_shape(J, Q, T, N, padding_mode):
+    B, C, L = 2, 3, 2**J+N
+    x = torch.zeros(B, C, L)
     graph = murenn.MuReNNDirect(
         J=J,
         Q=Q,
@@ -18,7 +19,7 @@ def test_direct_shape(J, Q, T, padding_mode):
         padding_mode=padding_mode,
     )
     y = graph(x)
-    assert y.shape == (B, C, Q, J, 2**4)
+    assert y.shape[:4] == (B, C, Q, J)
     
 
 def test_direct_diff():
