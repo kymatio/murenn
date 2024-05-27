@@ -1,12 +1,15 @@
 import torch
 import murenn
+import math
+
+from .utils import fix_length
 
 
 class MuReNNDirect(torch.nn.Module):
     """
     Args:
-        J (int): Number of levels of DTCWT decomposition.
-        Q (int): Number of Conv1D filters at each level.
+        J (int): Number of levels (octaves) of the DTCWT decomposition.
+        Q (int): Number of Conv1D filters per octave.
         in_channels (int): Number of channels in the input signal.
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
@@ -20,6 +23,7 @@ class MuReNNDirect(torch.nn.Module):
         self.dtcwt = murenn.DTCWT(
             J=J,
             padding_mode=padding_mode,
+            normalize=True,
         )
 
         for j in range(J):
@@ -27,8 +31,9 @@ class MuReNNDirect(torch.nn.Module):
                 J=J-j,
                 padding_mode=padding_mode,
                 skip_hps=True,
+                normalize=True,
             )
-            down.append(down_j)
+            self.down.append(down_j)
 
             conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
@@ -38,8 +43,9 @@ class MuReNNDirect(torch.nn.Module):
                 groups=in_channels,
                 padding="same",
             )
-            torch.nn.init.normal_(conv1d_j.weight)
+            torch.nn.init.normal_(conv1d_j.weight, std=1/math.sqrt(T))
             conv1d.append(conv1d_j)
+
         self.down = torch.nn.ModuleList(down)
         self.conv1d = torch.nn.ParameterList(conv1d)
 
@@ -47,29 +53,54 @@ class MuReNNDirect(torch.nn.Module):
     def forward(self, x):
         """
         Args:
-            x (PyTorch tensor): Input data. Should be a tensor of shape
-                `(B, C, T)` where B is the batch size, C is the number of
-                channels and T is the number of time samples.
-                Note that T must be a multiple of 2**J, where J is the number
-                of wavelet scales (see documentation of MuReNNDirect constructor).
-
+            x (PyTorch tensor): A tensor of shape `(B, C, T)`. B is a batch size, 
+                C denotes a number of channels, T is a length of signal sequence. 
         Returns:
-            y (PyTorch tensor): A tensor of shape `(B, C, Q, J, T/(2**J))`
+            y (PyTorch tensor): A tensor of shape `(B, C, Q, J, T_out)` if 
+                skip_lp=True, otherwise a tensor of shape `(B, C, Q, J, T/(2**J))`
         """
         assert self.C == x.shape[1]
-        _, bps = self.dtcwt(x)
-        ys = []
+        lp, bps = self.dtcwt(x)
+        output = []
 
         for j in range(self.dtcwt.J):
-            Wx_r = self.conv1d[j](bps[j].real)
-            Wx_i = self.conv1d[j](bps[j].imag)
-            Ux = Wx_r ** 2 + Wx_i ** 2
-            y_j, _ = self.down[j](Ux)
+            Wx_j_r = self.conv1d[j](bps[j].real)
+            Wx_j_i = self.conv1d[j](bps[j].imag)
+            UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
+            UWx_j, _ = self.down[j](UWx_j)
 
-            B, _, N = y_j.shape
+            B, C, N = UWx_j.shape
             # reshape from (B, C*Q, N) to (B, C, Q, N)
-            y_j = y_j.view(B, self.C, self.Q, N)
-            ys.append(y_j)
+            UWx_j = UWx_j.view(B, self.C, self.Q, N)
+            output.append(UWx_j)
 
-        y = torch.stack(ys, dim=3)
-        return y
+        return torch.stack(output, dim=3)
+
+
+class ModulusStable(torch.autograd.Function):
+    """Stable complex modulus
+
+    This class implements a modulus transform for complex numbers which is
+    stable with respect to very small inputs (z close to 0), avoiding
+    returning nans in all cases.
+
+    -------
+    Adapted from Kymatio: https://github.com/kymatio/kymatio/blob/main/kymatio/backend/torch_backend.py
+    Copyright (c) 2018, the Kymatio developers All rights reserved.
+    """
+    @staticmethod
+    def forward(ctx, x_r, x_i):
+        output = (x_r ** 2 + x_i ** 2).sqrt()
+        ctx.save_for_backward(x_r, x_i, output)
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        x_r, x_i, output = ctx.saved_tensors
+        dxr, dxi = None, None
+        if ctx.needs_input_grad[0]:
+            dxr = x_r.mul(grad_output).div(output)
+            dxi = x_i.mul(grad_output).div(output)
+            dxr.masked_fill_(output == 0, 0)
+            dxi.masked_fill_(output == 0, 0)
+        return dxr, dxi

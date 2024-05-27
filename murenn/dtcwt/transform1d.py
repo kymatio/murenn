@@ -4,6 +4,7 @@ import torch.nn
 
 from murenn.dtcwt.lowlevel import prep_filt
 from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
+from .utils import fix_length
 
 
 class DTCWT(torch.nn.Module):
@@ -226,6 +227,7 @@ class DTCWTInverse(DTCWT):
         alternate_gh=True,
         padding_mode="symmetric",
         normalize=True,
+        length=None,
     ):
         if padding_mode != "symmetric":
             raise NotImplementedError(
@@ -241,6 +243,7 @@ class DTCWTInverse(DTCWT):
             padding_mode=padding_mode,
             normalize=normalize,
         )
+        self.length = length
 
     def forward(self, yl, yh):
         """
@@ -301,4 +304,6 @@ class DTCWTInverse(DTCWT):
         x_phi = INV_J1.apply(
             x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode
         )
+        if self.length:
+            x_phi = fix_length(x_phi, size=self.length)
         return x_phi

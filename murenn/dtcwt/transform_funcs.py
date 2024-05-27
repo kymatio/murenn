@@ -47,7 +47,7 @@ class FWD_J1(torch.autograd.Function):
             hi = torch.nn.functional.conv1d(
                 pad_(x, h1, padding_mode), h1_rep, groups=ch)
 
-        # Return low-pass (x_phi), real and imaginary part of high-pass (x_psi) 
+        # Return low-pass (x_phi), real and imaginary part of high-pass (x_psi)
         return lo, hi[:,:,::2], hi[:,:,1::2]
     
     @staticmethod
