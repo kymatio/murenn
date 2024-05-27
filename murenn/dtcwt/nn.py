@@ -33,7 +33,7 @@ class MuReNNDirect(torch.nn.Module):
                 skip_hps=True,
                 normalize=True,
             )
-            self.down.append(down_j)
+            down.append(down_j)
 
             conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
