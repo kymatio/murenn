@@ -64,3 +64,43 @@ def int_to_mode(mode):
         return 'circular'
     else:
         raise ValueError("Unkown pad type: {}".format(mode))
+
+def fix_length(x, *, size, **kwargs):
+    """Fix the length an tensor ``x`` to exactly ``size`` along the last dimension.
+
+    If ``x.shape[-1] < n``, pad according to the provided kwargs.
+    By default, ``x`` is padded with trailing zeros.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        tensor to be length-adjusted
+    size : int >= 0 [scalar]
+        desired length
+    **kwargs : additional keyword arguments
+        Parameters to ``torch.nn.functional.pad``
+
+    Returns
+    -------
+    x_fixed : torch.Tensor [shape=x.shape]
+        ``x`` either trimmed or padded to length ``size``
+        along the last dimension.
+
+    See Also
+    --------
+    torch.nn.functional.pad
+
+    
+    Adapted from librosa.
+    """
+    kwargs.setdefault("mode", "constant")
+    n = x.shape[-1]
+    if n > size:
+        slices = [slice(None)] * x.ndim
+        slices[-1] = slice(0, size)
+        return x[tuple(slices)]
+
+    elif n < size:
+        length = size - n
+        return torch.nn.functional.pad(x, (0, length), **kwargs)
+    return x
