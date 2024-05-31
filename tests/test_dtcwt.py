@@ -59,10 +59,9 @@ def test_inv(level1, qshift, J, T, alternate_gh, normalize):
         include_scale=False,
         padding_mode="symmetric",
         normalize=normalize,
+        length=T,
     )
     X_rec = inv(lp, bp)
-    if  T % 2 != 0:
-        X_rec = X_rec[:, :, :-1]
     torch.testing.assert_close(Xt, X_rec)
 
 

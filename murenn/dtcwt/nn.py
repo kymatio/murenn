@@ -8,7 +8,7 @@ from .utils import fix_length
 class MuReNNDirect(torch.nn.Module):
     """
     Args:
-        J (int): Number of levels (octaves) of the DTCWT decomposition.
+        J (int): Number of levels (octaves) in the DTCWT decomposition.
         Q (int): Number of Conv1D filters per octave.
         in_channels (int): Number of channels in the input signal.
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
@@ -23,7 +23,6 @@ class MuReNNDirect(torch.nn.Module):
         self.dtcwt = murenn.DTCWT(
             J=J,
             padding_mode=padding_mode,
-            normalize=True,
         )
 
         for j in range(J):
@@ -31,7 +30,6 @@ class MuReNNDirect(torch.nn.Module):
                 J=J-j,
                 padding_mode=padding_mode,
                 skip_hps=True,
-                normalize=True,
             )
             down.append(down_j)
 
@@ -43,7 +41,7 @@ class MuReNNDirect(torch.nn.Module):
                 groups=in_channels,
                 padding="same",
             )
-            torch.nn.init.normal_(conv1d_j.weight, std=1/math.sqrt(T))
+            torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
 
         self.down = torch.nn.ModuleList(down)
@@ -56,24 +54,20 @@ class MuReNNDirect(torch.nn.Module):
             x (PyTorch tensor): A tensor of shape `(B, C, T)`. B is a batch size, 
                 C denotes a number of channels, T is a length of signal sequence. 
         Returns:
-            y (PyTorch tensor): A tensor of shape `(B, C, Q, J, T_out)` if 
-                skip_lp=True, otherwise a tensor of shape `(B, C, Q, J, T/(2**J))`
+            y (PyTorch tensor): A tensor of shape `(B, C, Q, J, T_out)`
         """
         assert self.C == x.shape[1]
         lp, bps = self.dtcwt(x)
         output = []
-
         for j in range(self.dtcwt.J):
             Wx_j_r = self.conv1d[j](bps[j].real)
             Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
             UWx_j, _ = self.down[j](UWx_j)
-
-            B, C, N = UWx_j.shape
+            B, _, N = UWx_j.shape
             # reshape from (B, C*Q, N) to (B, C, Q, N)
             UWx_j = UWx_j.view(B, self.C, self.Q, N)
             output.append(UWx_j)
-
         return torch.stack(output, dim=3)
 
 
@@ -82,11 +76,10 @@ class ModulusStable(torch.autograd.Function):
 
     This class implements a modulus transform for complex numbers which is
     stable with respect to very small inputs (z close to 0), avoiding
-    returning nans in all cases.
+    returning NaN's in all cases.
 
     -------
-    Adapted from Kymatio: https://github.com/kymatio/kymatio/blob/main/kymatio/backend/torch_backend.py
-    Copyright (c) 2018, the Kymatio developers All rights reserved.
+    Adapted from Kymatio
     """
     @staticmethod
     def forward(ctx, x_r, x_i):

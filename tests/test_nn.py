@@ -45,11 +45,11 @@ def test_direct_diff():
         assert conv1d.weight.grad != None
 
 
-@pytest.mark.parametrize("J", list(range(2, 3)))
 @pytest.mark.parametrize("Q", [3, 4])
 @pytest.mark.parametrize("T", [8, 16])
 @pytest.mark.parametrize("N", list(range(5)))
-def test_multi_layers(J, Q, T, N):
+def test_multi_layers(Q, T, N):
+    J = 2
     B, C, L = 2, 3, 2**J+N
     x = torch.zeros(B, C, L)
     for i in range(3):
