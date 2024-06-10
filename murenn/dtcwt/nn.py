@@ -51,10 +51,11 @@ class MuReNNDirect(torch.nn.Module):
     def forward(self, x):
         """
         Args:
-            x (PyTorch tensor): A tensor of shape `(B, C, T)`. B is a batch size, 
-                C denotes a number of channels, T is a length of signal sequence. 
+            x (PyTorch tensor): A tensor of shape `(B, in_channels, T)`. B is a batch size. 
+                in_channels is the number of channels in the input tensor, this should match
+                the in_channels attribute of the class instance. T is a length of signal sequence. 
         Returns:
-            y (PyTorch tensor): A tensor of shape `(B, C, Q, J, T_out)`
+            y (PyTorch tensor): A tensor of shape `(B, in_channels, Q, J, T_out)`
         """
         assert self.C == x.shape[1]
         lp, bps = self.dtcwt(x)
@@ -69,6 +70,55 @@ class MuReNNDirect(torch.nn.Module):
             UWx_j = UWx_j.view(B, self.C, self.Q, N)
             output.append(UWx_j)
         return torch.stack(output, dim=3)
+    
+    @property
+    def to_conv1d(self):
+        """
+        Get per channel, per filter, per scale impulse responses
+        Returns:
+            y (PyTorch tensor): A tensor of shape `(B, C*Q*J, (2**J)*Q)`
+        """
+        # T the filter length
+        T = self.conv1d[0].kernel_size[0]
+        # J the number of levels of decompostion
+        J = self.dtcwt.J
+        # Generate the impulse signal, this signal is zero padded to a length of (2**J)*T
+        N = 2**J * T
+        x = torch.zeros(1, self.C, N)
+        x[:, :, N//2] = 1
+        # Get the padding mode
+        padding_mode = self.dtcwt.padding_mode
+        if padding_mode == "constant":
+            padding_mode = "zeros"
+
+        inv = murenn.IDTCWT(
+            J=J,
+            padding_mode=padding_mode,
+        )
+        # Get dtcwt's impulse reponse at each scale
+        phi, psis = self.dtcwt(x)
+        # Set phi to a zero valued tensor
+        zeros_phi = phi.new_zeros(size=(1, self.C*self.Q, phi.shape[-1]))
+        # Create an empty list for {w_jq}
+        ys = []
+        for j in range(J):
+            # Wpsi_jr = Re[psi_j] * w_jq
+            Wpsi_jr = self.conv1d[j](psis[j].real)
+            # W_ji = Im[psi_j] * w_jq
+            Wpsi_ji = self.conv1d[j](psis[j].imag)
+            # Set the bp coefficients besides this scale to zero
+            Wpsis_jr = [Wpsi_jr * (1 + 0j) if k == j else psis[k].new_zeros(size=(1, self.C*self.Q, psis[k].shape[-1])) for k in range(J)]
+            Wpsis_ji = [Wpsi_ji * (0 + 1j) if k == j else psis[k].new_zeros(size=(1, self.C*self.Q, psis[k].shape[-1])) for k in range(J)]
+            # Get the impulse response
+            y_jr = inv(zeros_phi, Wpsis_jr)
+            y_ji = inv(zeros_phi, Wpsis_ji)
+            y_j = torch.complex(y_jr, y_ji)
+            ys.append(y_j)
+        ys = torch.cat(ys, dim=1)
+        return ys
+ 
+            
+
 
 
 class ModulusStable(torch.autograd.Function):
