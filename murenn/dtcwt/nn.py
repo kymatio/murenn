@@ -74,9 +74,10 @@ class MuReNNDirect(torch.nn.Module):
     @property
     def to_conv1d(self):
         """
-        Get per channel, per filter, per scale impulse responses
-        Returns:
-            y (PyTorch tensor): A tensor of shape `(B, C*Q*J, (2**J)*Q)`
+        Get the per scale, per filter, per input channel impulse responses.
+        -------
+        Return:
+            y (PyTorch tensor): A complex-valued tensor of shape `(B, in_channels*J*Q, (2**J)*Q)`
         """
         # T the filter length
         T = self.conv1d[0].kernel_size[0]
@@ -95,30 +96,27 @@ class MuReNNDirect(torch.nn.Module):
             J=J,
             padding_mode=padding_mode,
         )
-        # Get dtcwt's impulse reponse at each scale
+        # Get DTCWT impulse reponses
         phi, psis = self.dtcwt(x)
         # Set phi to a zero valued tensor
         zeros_phi = phi.new_zeros(size=(1, self.C*self.Q, phi.shape[-1]))
         # Create an empty list for {w_jq}
-        ys = []
+        ws = []
         for j in range(J):
             # Wpsi_jr = Re[psi_j] * w_jq
             Wpsi_jr = self.conv1d[j](psis[j].real)
             # W_ji = Im[psi_j] * w_jq
             Wpsi_ji = self.conv1d[j](psis[j].imag)
-            # Set the bp coefficients besides this scale to zero
-            Wpsis_jr = [Wpsi_jr * (1 + 0j) if k == j else psis[k].new_zeros(size=(1, self.C*self.Q, psis[k].shape[-1])) for k in range(J)]
-            Wpsis_ji = [Wpsi_ji * (0 + 1j) if k == j else psis[k].new_zeros(size=(1, self.C*self.Q, psis[k].shape[-1])) for k in range(J)]
+            # Set the coefficients besides this scale to zero .repeat(ch, 1, 1)
+            Wpsis_jr = [Wpsi_jr * (1 + 0j) if k == j else psis[k].new_zeros(size=psis[k].shape).repeat(1, self.Q, 1) for k in range(J)]
+            Wpsis_ji = [Wpsi_ji * (0 + 1j) if k == j else psis[k].new_zeros(size=psis[k].shape).repeat(1, self.Q, 1) for k in range(J)]
             # Get the impulse response
-            y_jr = inv(zeros_phi, Wpsis_jr)
-            y_ji = inv(zeros_phi, Wpsis_ji)
-            y_j = torch.complex(y_jr, y_ji)
-            ys.append(y_j)
-        ys = torch.cat(ys, dim=1)
-        return ys
- 
-            
-
+            w_jr = inv(zeros_phi, Wpsis_jr)
+            w_ji = inv(zeros_phi, Wpsis_ji)
+            w_j = torch.complex(w_jr, w_ji)
+            ws.append(w_j)
+        ws = torch.cat(ws, dim=1)
+        return ws
 
 
 class ModulusStable(torch.autograd.Function):
