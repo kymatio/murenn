@@ -36,8 +36,8 @@ tfm = murenn.MuReNNDirect(J=J, Q=Q, T=T, in_channels=C)
 w = tfm.to_conv1d.detach()
 w = w.view(1, J, Q, -1)
 
-#################################
-# Plot the spectrum.
+#########################################################################
+# Plot the spectrums per scale per filter.
 colors = [
     'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
     'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
