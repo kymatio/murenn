@@ -1,10 +1,10 @@
 # coding: utf-8
 """
 =========================
-Visualize Amplitude Spectrums
+Frequency Magnitude Response
 =========================
 
-This notebook demonstrates how to visualize the amplitude spectrums
+This notebook demonstrates how to visualize the frequency response
 of a 1-D convolutional layer (Conv1D).
 """
 
@@ -49,5 +49,5 @@ for q in range(Q):
 plt.grid(linestyle='--', alpha=0.5)
 plt.xlim(0, N//2)
 plt.xlabel("Frequency")
-plt.title(f'murenn v{murenn.__version__}. Amplitude Spectrums')
+plt.title(f'murenn v{murenn.__version__}. Frequency Magnitude Response')
 plt.show()
