@@ -30,6 +30,7 @@ class MuReNNDirect(torch.nn.Module):
                 J=J-j,
                 padding_mode=padding_mode,
                 skip_hps=True,
+                normalize=False,
             )
             down.append(down_j)
 
