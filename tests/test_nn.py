@@ -99,5 +99,6 @@ def test_toconv1d_shape(Q, T, C):
         T=T,
         in_channels=C,
     )
-    y = tfm.to_conv1d
-    assert y.shape == (1, Q*J*C, 2**J*T)
+    conv1d = tfm.to_conv1d
+    assert isinstance(conv1d, torch.nn.Conv1d) 
+    assert conv1d.weight.data.shape == (J*Q, 1, 2**J*T)
