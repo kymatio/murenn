@@ -75,10 +75,30 @@ class MuReNNDirect(torch.nn.Module):
     @property
     def to_conv1d(self):
         """
-        Get the per scale, per filter, per input channel impulse responses.
+        Compute the single-resolution equivalent impulse response of the MuReNN layer.
+        This would be helpful for visualization in Fourier domain, for receptive fields,
+        and for comparing computational costs.
+           DTCWT        conv1d        IDTCWT
+        δ -------> ψ_j --------> w_jq -------> y_jq
         -------
         Return:
-            y (PyTorch tensor): A complex-valued tensor of shape `(B, in_channels*J*Q, (2**J)*Q)`
+            conv1d (torch.nn.Conv1d): A Pytorch Conv1d instance with weights initialized to y_jq.
+        Examples
+        --------
+        >>> import matplotlib.pyplot as plt
+        >>> tfm = murenn.MuReNNDirect(J=8, Q=5, T=32, in_channels=1)
+        >>> conv1d = tfm.to_conv1d
+        >>> x = torch.zeros(1,1,2**10)
+        >>> x[0,0,N//2]=1
+        >>> x = x*(1+0j)
+        >>> w = conv1d(x*(1+0j)).reshape(J,Q,-1).detach()
+        >>> colors = [
+        >>>     'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
+        >>>     'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
+        >>> for j in range(J):
+        >>>     for q in range(Q):
+        >>>         plt.semilogx(torch.abs(torch.fft.fft(w[j,q,:])), color=colors[j])
+        >>> plt.xlim(0, N//2)
         """
         # T the filter length
         T = self.conv1d[0].kernel_size[0]
@@ -100,7 +120,8 @@ class MuReNNDirect(torch.nn.Module):
         # Get DTCWT impulse reponses
         phi, psis = self.dtcwt(x)
         # Set phi to a zero valued tensor
-        zeros_phi = phi.new_zeros(size=(1, self.C*self.Q, phi.shape[-1]))
+        # zeros_phi = phi.new_zeros(size=(1, self.C*self.Q, phi.shape[-1]))
+        zeros_phi = phi.new_zeros(size=(self.C, self.Q, phi.shape[-1]))
         # Create an empty list for {w_jq}
         ws = []
         for j in range(J):
@@ -108,16 +129,26 @@ class MuReNNDirect(torch.nn.Module):
             Wpsi_jr = self.conv1d[j](psis[j].real)
             # W_ji = Im[psi_j] * w_jq
             Wpsi_ji = self.conv1d[j](psis[j].imag)
-            # Set the coefficients besides this scale to zero .repeat(ch, 1, 1)
+            # Set the coefficients besides this scale to zero
             Wpsis_jr = [Wpsi_jr * (1 + 0j) if k == j else psis[k].new_zeros(size=psis[k].shape).repeat(1, self.Q, 1) for k in range(J)]
             Wpsis_ji = [Wpsi_ji * (0 + 1j) if k == j else psis[k].new_zeros(size=psis[k].shape).repeat(1, self.Q, 1) for k in range(J)]
             # Get the impulse response
             w_jr = inv(zeros_phi, Wpsis_jr)
             w_ji = inv(zeros_phi, Wpsis_ji)
             w_j = torch.complex(w_jr, w_ji)
+            # We only need data form one channel
+            w_j = w_j.reshape(self.C, self.Q, 1, N)[0,...]
             ws.append(w_j)
-        ws = torch.cat(ws, dim=1)
-        return ws
+        ws = torch.cat(ws, dim=0) # this tensor has a shape of J*Q, 1, N,
+        conv1d = torch.nn.Conv1d(
+            in_channels=1,
+            out_channels=J*self.Q,
+            kernel_size=N,
+            bias=False,
+            padding="same",
+        )
+        conv1d.weight.data = torch.nn.parameter.Parameter(ws)
+        return conv1d
 
 
 class ModulusStable(torch.autograd.Function):
