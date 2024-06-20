@@ -23,6 +23,7 @@ class MuReNNDirect(torch.nn.Module):
         self.dtcwt = murenn.DTCWT(
             J=J,
             padding_mode=padding_mode,
+            normalize=False,
         )
 
         for j in range(J):
@@ -91,7 +92,7 @@ class MuReNNDirect(torch.nn.Module):
         >>> x = torch.zeros(1,1,2**10)
         >>> x[0,0,N//2]=1
         >>> x = x*(1+0j)
-        >>> w = conv1d(x*(1+0j)).reshape(J,Q,-1).detach()
+        >>> w = conv1d(x).reshape(J,Q,-1).detach()
         >>> colors = [
         >>>     'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
         >>>     'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
@@ -104,7 +105,7 @@ class MuReNNDirect(torch.nn.Module):
         T = self.conv1d[0].kernel_size[0]
         # J the number of levels of decompostion
         J = self.dtcwt.J
-        # Generate the impulse signal, this signal is zero padded to a length of (2**J)*T
+        # Generate the impulse signal
         N = 2**J * T
         x = torch.zeros(1, self.C, N)
         x[:, :, N//2] = 1
@@ -116,12 +117,12 @@ class MuReNNDirect(torch.nn.Module):
         inv = murenn.IDTCWT(
             J=J,
             padding_mode=padding_mode,
+            normalize=False,
         )
         # Get DTCWT impulse reponses
         phi, psis = self.dtcwt(x)
         # Set phi to a zero valued tensor
-        # zeros_phi = phi.new_zeros(size=(1, self.C*self.Q, phi.shape[-1]))
-        zeros_phi = phi.new_zeros(size=(self.C, self.Q, phi.shape[-1]))
+        zeros_phi = phi.new_zeros(size=(1, self.C*self.Q, phi.shape[-1]))
         # Create an empty list for {w_jq}
         ws = []
         for j in range(J):
