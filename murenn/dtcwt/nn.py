@@ -87,11 +87,14 @@ class MuReNNDirect(torch.nn.Module):
         Examples
         --------
         >>> import matplotlib.pyplot as plt
+        >>> J = 8
+        >>> Q = 5
+        >>> N = 2**10
         >>> tfm = murenn.MuReNNDirect(J=8, Q=5, T=32, in_channels=1)
         >>> conv1d = tfm.to_conv1d
-        >>> x = torch.zeros(1,1,2**10)
+        >>> x = torch.zeros(1,1,N)
         >>> x[0,0,N//2]=1
-        >>> x = x*(1+0j)
+        >>> x = x*(1-1j)
         >>> w = conv1d(x).reshape(J,Q,-1).detach()
         >>> colors = [
         >>>     'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
