@@ -84,8 +84,8 @@ def test_inv():
     lp, bp = dtcwt(Xt)
     lp = lp.new_zeros(lp.shape)
     X_rec = idtcwt(lp, bp)
-    bp_r = [(bp[j].real)*(1+0j) for j in range(8)]
-    bp_i = [(bp[j].imag)*(0+1j) for j in range(8)]
+    bp_r = [(bp[j].real)*(1+0j) for j in range(dtcwt.J)]
+    bp_i = [(bp[j].imag)*(0+1j) for j in range(dtcwt.J)]
     X_rec_r = idtcwt(lp, bp_r)
     X_rec_i = idtcwt(lp, bp_i)
     assert torch.allclose((X_rec_r+X_rec_i), X_rec, atol=1e-3)

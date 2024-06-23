@@ -84,25 +84,6 @@ class MuReNNDirect(torch.nn.Module):
         -------
         Return:
             conv1d (torch.nn.Conv1d): A Pytorch Conv1d instance with weights initialized to y_jq.
-        Examples
-        --------
-        >>> import matplotlib.pyplot as plt
-        >>> J = 8
-        >>> Q = 5
-        >>> N = 2**10
-        >>> tfm = murenn.MuReNNDirect(J=8, Q=5, T=32, in_channels=1)
-        >>> conv1d = tfm.to_conv1d
-        >>> x = torch.zeros(1,1,N)
-        >>> x[0,0,N//2]=1
-        >>> x = x*(1-1j)
-        >>> w = conv1d(x).reshape(J,Q,-1).detach()
-        >>> colors = [
-        >>>     'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
-        >>>     'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
-        >>> for j in range(J):
-        >>>     for q in range(Q):
-        >>>         plt.semilogx(torch.abs(torch.fft.fft(w[j,q,:])), color=colors[j])
-        >>> plt.xlim(0, N//2)
         """
         # T the filter length
         T = self.conv1d[0].kernel_size[0]
@@ -112,34 +93,22 @@ class MuReNNDirect(torch.nn.Module):
         N = 2**J * T
         x = torch.zeros(1, self.C, N)
         x[:, :, N//2] = 1
-        # Get the padding mode
-        padding_mode = self.dtcwt.padding_mode
-        if padding_mode == "constant":
-            padding_mode = "zeros"
-
         inv = murenn.IDTCWT(
-            J=J,
-            padding_mode=padding_mode,
-            normalize=False,
+            J = J,
+            normalize=True,            
         )
         # Get DTCWT impulse reponses
         phi, psis = self.dtcwt(x)
         # Set phi to a zero valued tensor
         zeros_phi = phi.new_zeros(size=(1, self.C*self.Q, phi.shape[-1]))
-        # Create an empty list for {w_jq}
         ws = []
         for j in range(J):
-            # Wpsi_jr = Re[psi_j] * w_jq
             Wpsi_jr = self.conv1d[j](psis[j].real)
-            # W_ji = Im[psi_j] * w_jq
             Wpsi_ji = self.conv1d[j](psis[j].imag)
             # Set the coefficients besides this scale to zero
-            Wpsis_jr = [Wpsi_jr * (1 + 0j) if k == j else psis[k].new_zeros(size=psis[k].shape).repeat(1, self.Q, 1) for k in range(J)]
-            Wpsis_ji = [Wpsi_ji * (0 + 1j) if k == j else psis[k].new_zeros(size=psis[k].shape).repeat(1, self.Q, 1) for k in range(J)]
+            Wpsis_j = [torch.complex(Wpsi_jr, Wpsi_ji) if k == j else psis[k].new_zeros(size=psis[k].shape).repeat(1, self.Q, 1) for k in range(J)]
             # Get the impulse response
-            w_jr = inv(zeros_phi, Wpsis_jr)
-            w_ji = inv(zeros_phi, Wpsis_ji)
-            w_j = torch.complex(w_jr, w_ji)
+            w_j = inv(zeros_phi, Wpsis_j)
             # We only need data form one channel
             w_j = w_j.reshape(self.C, self.Q, 1, N)[0,...]
             ws.append(w_j)

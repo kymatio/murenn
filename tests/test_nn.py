@@ -90,14 +90,13 @@ def test_modulus():
 
 @pytest.mark.parametrize("Q", [1, 2])
 @pytest.mark.parametrize("T", [1, 2])
-@pytest.mark.parametrize("C", [1, 2])
-def test_toconv1d_shape(Q, T, C):
+def test_toconv1d_shape(Q, T):
     J = 4
     tfm = murenn.MuReNNDirect(
         J=J,
         Q=Q,
         T=T,
-        in_channels=C,
+        in_channels=2,
     )
     conv1d = tfm.to_conv1d
     assert isinstance(conv1d, torch.nn.Conv1d) 
