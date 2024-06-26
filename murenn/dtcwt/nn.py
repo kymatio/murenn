@@ -9,21 +9,29 @@ class MuReNNDirect(torch.nn.Module):
     """
     Args:
         J (int): Number of levels (octaves) in the DTCWT decomposition.
-        Q (int): Number of Conv1D filters per octave.
+        Q (int, dict or list): Number of Conv1D filters per octave.
+        T (int): Conv1D Kernel size multiplier
         in_channels (int): Number of channels in the input signal.
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
     """
-    def __init__(self, *, J, Q, T, in_channels, padding_mode="symmetric"):
+    def __init__(self, *, J, Q, T, in_channels, padding_mode="symmetric", spectrogram=True):
         super().__init__()
-        self.Q = Q
-        self.C = in_channels
+        if isinstance(Q, int):
+            self.Q = [Q for j in range(J)]
+        elif isinstance(Q, (dict, list)):
+            assert len(Q) == J
+            self.Q = Q
+        else:
+            raise TypeError(f"Q must to be int, dict or list, got {type(Q)}")
+        self.T = [T*self.Q[j] for j in range(J)]
+        self.in_channels = in_channels
         down = []
         conv1d = []
         self.dtcwt = murenn.DTCWT(
             J=J,
             padding_mode=padding_mode,
-            normalize=False,
+            normalize=True,
         )
 
         for j in range(J):
@@ -37,8 +45,8 @@ class MuReNNDirect(torch.nn.Module):
 
             conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
-                out_channels=Q*in_channels,
-                kernel_size=T,
+                out_channels=self.Q[j]*in_channels,
+                kernel_size=self.T[j],
                 bias=False,
                 groups=in_channels,
                 padding="same",
@@ -48,6 +56,7 @@ class MuReNNDirect(torch.nn.Module):
 
         self.down = torch.nn.ModuleList(down)
         self.conv1d = torch.nn.ParameterList(conv1d)
+        self.spectrogram = spectrogram
 
 
     def forward(self, x):
@@ -59,19 +68,24 @@ class MuReNNDirect(torch.nn.Module):
         Returns:
             y (PyTorch tensor): A tensor of shape `(B, in_channels, Q, J, T_out)`
         """
-        assert self.C == x.shape[1]
+        assert self.in_channels == x.shape[1]
         lp, bps = self.dtcwt(x)
-        output = []
+        UWx = []
         for j in range(self.dtcwt.J):
             Wx_j_r = self.conv1d[j](bps[j].real)
             Wx_j_i = self.conv1d[j](bps[j].imag)
-            UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
+            # UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
+            UWx_j = Wx_j_r**2 + Wx_j_i**2
+            # Avarange over time
             UWx_j, _ = self.down[j](UWx_j)
             B, _, N = UWx_j.shape
-            # reshape from (B, C*Q, N) to (B, C, Q, N)
-            UWx_j = UWx_j.view(B, self.C, self.Q, N)
-            output.append(UWx_j)
-        return torch.stack(output, dim=3)
+            UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
+            UWx.append(UWx_j)
+        # Frequency range from high to low
+        UWx = torch.cat(UWx, dim=2)
+        if self.spectrogram:
+            UWx = torch.flip(UWx, dims=(-2,))
+        return UWx
     
     @property
     def to_conv1d(self):
@@ -85,13 +99,16 @@ class MuReNNDirect(torch.nn.Module):
         Return:
             conv1d (torch.nn.Conv1d): A Pytorch Conv1d instance with weights initialized to y_jq.
         """
+
+
         # T the filter length
-        T = self.conv1d[0].kernel_size[0]
+        # T = self.conv1d[0].kernel_size[0]
+        T = max(self.T)
         # J the number of levels of decompostion
         J = self.dtcwt.J
         # Generate the impulse signal
-        N = 2**J * T
-        x = torch.zeros(1, self.C, N)
+        N = 2 ** J * T
+        x = torch.zeros(1, self.in_channels, N)
         x[:, :, N//2] = 1
         inv = murenn.IDTCWT(
             J = J,
@@ -100,22 +117,24 @@ class MuReNNDirect(torch.nn.Module):
         # Get DTCWT impulse reponses
         phi, psis = self.dtcwt(x)
         # Set phi to a zero valued tensor
-        zeros_phi = phi.new_zeros(size=(1, self.C*self.Q, phi.shape[-1]))
+        zeros_phi = phi.new_zeros(1,1,phi.shape[-1])
         ws = []
         for j in range(J):
-            Wpsi_jr = self.conv1d[j](psis[j].real)
-            Wpsi_ji = self.conv1d[j](psis[j].imag)
-            # Set the coefficients besides this scale to zero
-            Wpsis_j = [torch.complex(Wpsi_jr, Wpsi_ji) if k == j else psis[k].new_zeros(size=psis[k].shape).repeat(1, self.Q, 1) for k in range(J)]
-            # Get the impulse response
-            w_j = inv(zeros_phi, Wpsis_j)
-            # We only need data form one channel
-            w_j = w_j.reshape(self.C, self.Q, 1, N)[0,...]
-            ws.append(w_j)
-        ws = torch.cat(ws, dim=0) # this tensor has a shape of J*Q, 1, N,
+            Wpsi_jr = self.conv1d[j](psis[j].real).reshape(self.in_channels, self.Q[j], -1)
+            Wpsi_ji = self.conv1d[j](psis[j].imag).reshape(self.in_channels, self.Q[j], -1)
+            for q in range(self.Q[j]):
+                Wpsi_jqr = Wpsi_jr[0, q, :].reshape(1,1,-1)
+                Wpsi_jqi = Wpsi_ji[0, q, :].reshape(1,1,-1)
+                # Wpsis_j = [torch.complex(Wpsi_jr, Wpsi_ji) if k == j else psis[k].new_zeros(psis[k].shape).repeat(1, self.Q[k], 1) for k in range(J)]
+                Wpsis_jq = [torch.complex(Wpsi_jqr, Wpsi_jqi) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
+                w_jq = inv(zeros_phi, Wpsis_jq)
+                ws.append(w_jq)
+        ws = torch.cat(ws, dim=0)
+        if self.spectrogram:
+            ws = torch.flip(ws, dims=(1,))
         conv1d = torch.nn.Conv1d(
             in_channels=1,
-            out_channels=J*self.Q,
+            out_channels=ws.shape[0],
             kernel_size=N,
             bias=False,
             padding="same",
