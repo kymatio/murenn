@@ -75,7 +75,7 @@ class FWD_J2PLUS(torch.autograd.Function):
     high-pass output of tree b."""
 
     @staticmethod
-    def forward(ctx, x_phi, h0a, h1a, h0b, h1b, skip_hps, padding_mode, normalize):
+    def forward(ctx, x_phi, h0a, h1a, h0b, h1b, skip_hps, padding_mode):
         """
         Forward dual-tree complex wavelet transform at levels 2 and coarser.
 
@@ -104,7 +104,6 @@ class FWD_J2PLUS(torch.autograd.Function):
         ctx.save_for_backward(h0a_rep, h1a_rep, h0b_rep, h1b_rep)
         ctx.skip_hps = skip_hps
         ctx.mode = mode_to_int(padding_mode)
-        ctx.normalize = normalize
 
         # Apply low-pass filtering on trees a (real) and b (imaginary).
         lo = coldfilt(x_phi, h0a_rep, h0b_rep, padding_mode)
@@ -122,17 +121,13 @@ class FWD_J2PLUS(torch.autograd.Function):
 
         # Return low-pass output, and band-pass output in conjunction:
         # real part for tree a and imaginary part for tree b.
-        if normalize:
-            return 1/np.sqrt(2) * lo, 1/np.sqrt(2) * bp_r, 1/np.sqrt(2) * bp_i
-        else:
-            return lo, bp_r, bp_i
+        return lo, bp_r, bp_i
 
     @staticmethod
     def backward(ctx, dx_phi, dx_psi_r, dx_psi_i):
         g0b, g1b, g0a, g1a = ctx.saved_tensors
         skip_hps = ctx.skip_hps
         padding_mode = int_to_mode(ctx.mode)
-        normalize = ctx.normalize
         b, ch, T = dx_phi.shape
         if not ctx.needs_input_grad[0]:
             dx = None
@@ -141,8 +136,6 @@ class FWD_J2PLUS(torch.autograd.Function):
             if not skip_hps:
                 dx_psi = torch.stack((dx_psi_i, dx_psi_r), dim=-1).view(b, ch, T)
                 dx += colifilt(dx_psi, g1a, g1b, padding_mode)
-            if normalize:
-                dx *= 1/np.sqrt(2)
         return dx, None, None, None, None, None, None, None
 
 
@@ -212,7 +205,7 @@ class INV_J2PLUS(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, lo, bp_r, bp_i, g0a, g1a, g0b, g1b, padding_mode, normalize):
+    def forward(ctx, lo, bp_r, bp_i, g0a, g1a, g0b, g1b, padding_mode):
         """
         Inverse dual-tree complex wavelet transform at levels 2 and coarser.
 
@@ -237,33 +230,25 @@ class INV_J2PLUS(torch.autograd.Function):
         g0b_rep = g0b.repeat(ch, 1, 1)
         g1b_rep = g1b.repeat(ch, 1, 1)
         ctx.save_for_backward(g0a_rep, g1a_rep, g0b_rep, g1b_rep)
-        ctx.normalize = normalize
         ctx.mode = mode_to_int(padding_mode)
 
         bp = torch.stack((bp_i, bp_r), dim=-1).view(b, ch, T)
         lo = colifilt(lo, g0a_rep, g0b_rep, padding_mode) + colifilt(bp, g1a_rep, g1b_rep, padding_mode)
 
-        if normalize:
-            return np.sqrt(2) * lo
-        else:
-            return lo
+        return lo
+
 
     @staticmethod
     def backward(ctx, dx):
         g0b, g1b, g0a, g1a = ctx.saved_tensors
         padding_mode = int_to_mode(ctx.mode)
-        normalize = ctx.normalize
         b, ch, T = dx.shape
         dlo, dbp = None, None
         if ctx.needs_input_grad[0]:
             dlo = coldfilt(dx, g0a, g0b, padding_mode)
             dlo = torch.stack([dlo[:,:ch], dlo[:,ch:2*ch]], dim=-1).view(b, ch, T//2)
-            if normalize:
-                dlo *= np.sqrt(2)
             if ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
                 dbp = coldfilt(dx, g1a, g1b, padding_mode)
-                if normalize:
-                    dbp *= np.sqrt(2)
                 if ctx.needs_input_grad[1]:
                     dbp_r = dbp[:,ch:2*ch]
                 if ctx.needs_input_grad[2]:
