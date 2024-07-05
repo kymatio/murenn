@@ -156,7 +156,8 @@ class DTCWTDirect(DTCWT):
             # Ensure the lowpass is divisible by 4
             if x_phi.shape[-1] % 4 != 0:
                 x_phi = torch.cat((x_phi[:,:,0:1], x_phi, x_phi[:,:,-1:]), dim=-1)
-
+            if self.normalize:
+                x_phi = 1/np.sqrt(2) * x_phi
             x_phi, x_psi_r, x_psi_i = FWD_J2PLUS.apply(
                 x_phi,
                 h0a,
@@ -165,15 +166,12 @@ class DTCWTDirect(DTCWT):
                 h1b,
                 self.skip_hps[j],
                 self.padding_mode,
-                self.normalize,
             )
-
             if (j % 2 == 1) and self.alternate_gh:
                 # The result is anti-analytic in the Hilbert sense.
                 # We conjugate the result to bring the spectrum back to (0, pi).
                 # This is purely by convention and for consistency through j.
                 x_psi_i = -1 * x_psi_i
-
             x_psis.append(x_psi_r + 1j * x_psi_i)
 
             if self.include_scale[j]:
@@ -295,8 +293,9 @@ class DTCWTInverse(DTCWT):
                 g0b,
                 g1b,
                 self.padding_mode,
-                self.normalize,
             )
+            if self.normalize:
+                x_phi = np.sqrt(2) * x_phi
 
         ## LEVEL 1 ##
         x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
