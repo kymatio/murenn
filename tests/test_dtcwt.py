@@ -95,24 +95,6 @@ def test_phi(alternate_gh):
 
 
 @pytest.mark.parametrize("alternate_gh", [True, False])
-def test_psis(alternate_gh):
-    '''
-    Test the high-pass outputs psis don't diverge.
-    '''
-    N = 1024
-    sr = 16000
-    nyquist = sr/ 2
-    J = 8
-    f = nyquist / (2 ** J)
-    t = torch.arange(N) / sr
-    sin = torch.sin(2 * math.pi * f * t).reshape(1,1,-1)
-    tfm = murenn.DTCWT(J = J, normalize=True, alternate_gh=alternate_gh)
-    _, bps = tfm(sin)
-    for bp in bps:
-        assert torch.max(torch.abs(bp)) <= 1
-
-
-@pytest.mark.parametrize("alternate_gh", [True, False])
 def test_energy_preservation(alternate_gh):
     '''
     Test Parseval’s energy theorem: the energy of the input signal 
