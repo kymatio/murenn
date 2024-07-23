@@ -26,7 +26,7 @@ class MuReNNDirect(torch.nn.Module):
         else:
             raise TypeError(f"Q must to be int, dict or list, got {type(Q)}")
         if J_phi is None:
-            self.J_phi = J
+            J_phi = J
         if J_phi < J:
             raise ValueError("J_phi must be greater or equal to J")
         self.T = [T*self.Q[j] for j in range(J)]
@@ -36,7 +36,7 @@ class MuReNNDirect(torch.nn.Module):
         self.dtcwt = murenn.DTCWT(
             J=J,
             padding_mode=padding_mode,
-            normalize=True,
+            alternate_gh=False,
         )
 
         for j in range(J):
@@ -44,7 +44,7 @@ class MuReNNDirect(torch.nn.Module):
                 J=J_phi-j,
                 padding_mode=padding_mode,
                 skip_hps=True,
-                normalize=False,
+                alternate_gh=False,
             )
             down.append(down_j)
 
@@ -78,14 +78,12 @@ class MuReNNDirect(torch.nn.Module):
         for j in range(self.dtcwt.J):
             Wx_j_r = self.conv1d[j](bps[j].real)
             Wx_j_i = self.conv1d[j](bps[j].imag)
-            # UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
-            UWx_j = Wx_j_r**2 + Wx_j_i**2
+            UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
             # Avarange over time
             UWx_j, _ = self.down[j](UWx_j)
             B, _, N = UWx_j.shape
             UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
-        # Frequency range from high to low
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
@@ -104,7 +102,6 @@ class MuReNNDirect(torch.nn.Module):
 
         device = self.conv1d[0].weight.data.device
         # T the filter length
-        # T = self.conv1d[0].kernel_size[0]
         T = max(self.T)
         # J the number of levels of decompostion
         J = self.dtcwt.J
@@ -114,12 +111,12 @@ class MuReNNDirect(torch.nn.Module):
         x[:, :, N//2] = 1
         inv = murenn.IDTCWT(
             J = J,
-            normalize=True,            
+            alternate_gh=False         
         ).to(device)
         # Get DTCWT impulse reponses
         phi, psis = self.dtcwt(x)
         # Set phi to a zero valued tensor
-        zeros_phi = phi.new_zeros(1,1,phi.shape[-1])
+        zeros_phi = phi.new_zeros(1, 1, phi.shape[-1])
         ws = []
         for j in range(J):
             Wpsi_jr = self.conv1d[j](psis[j].real).reshape(self.in_channels, self.Q[j], -1)
@@ -127,10 +124,11 @@ class MuReNNDirect(torch.nn.Module):
             for q in range(self.Q[j]):
                 Wpsi_jqr = Wpsi_jr[0, q, :].reshape(1,1,-1)
                 Wpsi_jqi = Wpsi_ji[0, q, :].reshape(1,1,-1)
-                # Wpsis_j = [torch.complex(Wpsi_jr, Wpsi_ji) if k == j else psis[k].new_zeros(psis[k].shape).repeat(1, self.Q[k], 1) for k in range(J)]
-                Wpsis_jq = [torch.complex(Wpsi_jqr, Wpsi_jqi) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
-                w_jq = inv(zeros_phi, Wpsis_jq)
-                ws.append(w_jq)
+                Wpsis_r = [Wpsi_jqr * (1+0j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
+                Wpsis_i = [Wpsi_jqi * (0+1j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
+                w_r = inv(zeros_phi, Wpsis_r)
+                w_i = inv(zeros_phi, Wpsis_i)
+                ws.append(torch.complex(w_r, w_i))
         ws = torch.cat(ws, dim=0)
         conv1d = torch.nn.Conv1d(
             in_channels=1,
