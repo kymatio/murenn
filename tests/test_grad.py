@@ -1,8 +1,6 @@
 import pytest
 import torch
 from torch.autograd import gradcheck
-import numpy as np
-import dtcwt
 import murenn
 import murenn.dtcwt.transform_funcs as tf
 from contextlib import contextmanager
@@ -36,15 +34,14 @@ def test_fwd_j1(skip_hps):
     gradcheck(tf.FWD_J1.apply, input, eps=eps, atol=atol)
 
 
-@pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("skip_hps", [[0, 1], [1, 0]])
-def test_fwd_j2(skip_hps, normalize):
+def test_fwd_j2(skip_hps):
     J = 2
     eps = 1e-3
     atol = 1e-4
     with set_double_precision():
         x = torch.randn(2, 2, 4, device=dev, requires_grad=True)
-        fwd = murenn.DTCWTDirect(J=J, skip_hps=skip_hps, normalize=normalize).to(dev)
+        fwd = murenn.DTCWTDirect(J=J, skip_hps=skip_hps).to(dev)
     input = (
         x,
         fwd.h0a,
@@ -53,7 +50,6 @@ def test_fwd_j2(skip_hps, normalize):
         fwd.h1b,
         fwd.skip_hps[1],
         fwd.padding_mode,
-        fwd.normalize,
     )
     gradcheck(tf.FWD_J2PLUS.apply, input, eps=eps, atol=atol)
 
@@ -71,8 +67,7 @@ def test_inv_j1():
     gradcheck(tf.INV_J1.apply, input, eps=eps, atol=atol)
 
 
-@pytest.mark.parametrize("normalize", [True, False])
-def test_inv_j2(normalize):
+def test_inv_j2():
     J = 2
     eps = 1e-3
     atol = 1e-4
@@ -80,7 +75,7 @@ def test_inv_j2(normalize):
         lo = torch.randn(2, 2, 8, device=dev, requires_grad=True)
         bp_r = torch.randn(2, 2, 4, device=dev, requires_grad=True)
         bp_i = torch.randn(2, 2, 4, device=dev, requires_grad=True)
-        inv = murenn.DTCWTInverse(J=J, normalize=normalize).to(dev)
+        inv = murenn.DTCWTInverse(J=J).to(dev)
 
     input = (
         lo,
@@ -91,7 +86,6 @@ def test_inv_j2(normalize):
         inv.g0b,
         inv.g1b,
         inv.padding_mode,
-        inv.normalize,
     )
     gradcheck(tf.INV_J2PLUS.apply, input, eps=eps, atol=atol)
 
