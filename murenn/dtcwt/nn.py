@@ -10,7 +10,8 @@ class MuReNNDirect(torch.nn.Module):
     Args:
         J (int): Number of levels (octaves) in the DTCWT decomposition.
         Q (int, dict or list): Number of Conv1D filters per octave.
-        T (int): Conv1D Kernel size multiplier
+        T (int): Conv1D Kernel size multiplier. The Conv1d kernel size at scale j is equal to
+          T * Q[j] where Q[j] is the number of filters.
         J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J.
         in_channels (int): Number of channels in the input signal.
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
