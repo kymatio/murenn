@@ -88,7 +88,6 @@ class FWD_J2PLUS(torch.autograd.Function):
             h1b: high-pass filter of tree b (imaginary part)
             skip_hps: if True, skip high-pass filtering
             padding_mode: 'constant'(zero padding), 'symmetric', 'replicate' or 'circular'
-            normalise: bool, normalise or not
 
         Returns:
             lo: low-pass output from both trees
