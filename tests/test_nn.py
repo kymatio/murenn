@@ -98,5 +98,5 @@ def test_toconv1d_shape(Q, T):
         T=T,
         in_channels=2,
     )
-    conv1d = tfm.to_conv1d
+    conv1d = tfm.to_conv1d()
     assert isinstance(conv1d, torch.nn.Conv1d)
