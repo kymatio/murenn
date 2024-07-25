@@ -297,7 +297,10 @@ class DTCWTInverse(DTCWT):
             if self.normalize:
                 x_phi = np.sqrt(2) * x_phi
 
-        ## LEVEL 1 ##
+        # LEVEL 1 ##
+        if x_phi.shape[-1] != x_psis[0].shape[-1] * 2:
+            x_phi = x_phi[:,:,1:-1]
+
         x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
 
         x_phi = INV_J1.apply(
