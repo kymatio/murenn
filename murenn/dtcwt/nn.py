@@ -88,7 +88,7 @@ class MuReNNDirect(torch.nn.Module):
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
-    def to_conv1d(self):
+    def to_conv1d(self, output_format='Complex'):
         """
         Compute the single-resolution equivalent impulse response of the MuReNN layer.
         This would be helpful for visualization in Fourier domain, for receptive fields,
@@ -128,7 +128,12 @@ class MuReNNDirect(torch.nn.Module):
                 Wpsis_i = [Wpsi_jqi * (0+1j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
                 w_r = inv(zeros_phi, Wpsis_r)
                 w_i = inv(zeros_phi, Wpsis_i)
-                ws.append(torch.complex(w_r, w_i))
+                if output_format == 'Complex':
+                    ws.append(torch.complex(w_r, w_i))
+                elif output_format == 'Magnitude':
+                    ws.append(w_r+w_i)
+                else:
+                    raise ValueError(f"output_format must be 'Complex' or 'Magnitude', got {output_format}")
         ws = torch.cat(ws, dim=0)
         conv1d = torch.nn.Conv1d(
             in_channels=1,

@@ -61,16 +61,16 @@ def effective_receptive_field_murenn(J, T, N, weight_fn):
     y_psis = []
     for j in range(J):
         x_j = x_psis[j]
-        w = weight_fn(1, 1, T) * math.sqrt(2**j)
+        w = weight_fn(1, 1, T)
         y_j_re = torch.nn.functional.conv1d(x_j.real, w, padding='same')
         y_j_im = torch.nn.functional.conv1d(x_j.imag, w, padding='same')
         y_j = torch.complex(y_j_re, y_j_im)
         y_psis.append(y_j)
 
-    y = idtcwt(yh=y_psis, yl=x_phi)
+    y = idtcwt(yh=y_psis, yl=x_phi*0)
     y0 = y[0, :, N//2]
     y0.backward()
-    g = torch.abs(x.grad.squeeze())**2
+    g = torch.abs(x.grad.squeeze())
     return g
 
 
@@ -121,7 +121,7 @@ plt.fill_between(torch.log2(t), murenn_quantile_loggrad[0, N//2:],
     murenn_quantile_loggrad[1, N//2:], alpha=0.3)
 
 plt.plot(torch.log2(t), -torch.log2(t), linestyle='--', label='Power law')
-plt.plot([J+math.log2(T)-0.5] * 2, [math.log2(epsilon), 0],
+plt.plot([J+math.log2(T)] * 2, [math.log2(epsilon), 0],
     linestyle='--', label='Theoretical bound')
 
 plt.grid(linestyle='--')
