@@ -121,7 +121,7 @@ plt.fill_between(torch.log2(t), murenn_quantile_loggrad[0, N//2:],
     murenn_quantile_loggrad[1, N//2:], alpha=0.3)
 
 plt.plot(torch.log2(t), -torch.log2(t), linestyle='--', label='Power law')
-plt.plot([J+math.log2(T)] * 2, [math.log2(epsilon), 0],
+plt.plot([J+math.log2(T)-0.5] * 2, [math.log2(epsilon), 0],
     linestyle='--', label='Theoretical bound')
 
 plt.grid(linestyle='--')
