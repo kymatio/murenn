@@ -32,6 +32,7 @@ class MuReNNDirect(torch.nn.Module):
             raise ValueError("J_phi must be greater or equal to J")
         self.T = [T*self.Q[j] for j in range(J)]
         self.in_channels = in_channels
+        self.padding_mode = padding_mode
         down = []
         conv1d = []
         self.dtcwt = murenn.DTCWT(
@@ -88,6 +89,7 @@ class MuReNNDirect(torch.nn.Module):
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
+    
     def to_conv1d(self):
         """
         Compute the single-resolution equivalent impulse response of the MuReNN layer.
@@ -139,6 +141,50 @@ class MuReNNDirect(torch.nn.Module):
         )
         conv1d.weight.data = torch.nn.parameter.Parameter(ws)
         return conv1d
+
+
+    @property
+    def subbands(self):
+        """
+        Return the subbands boundaries.
+        """
+        N = 2 ** (self.dtcwt.J + 4)
+        x = torch.zeros(1, 1, N)
+        x[0, 0, N//2] = 1
+
+        dtcwt = self.dtcwt
+        idtcwt = murenn.DTCWTInverse(
+            self.dtcwt.J, 
+            alternate_gh=False, 
+        )
+        # Compute the DTCWT of the impulse signal
+        x_phi, x_psis = dtcwt(x)
+        ys = []
+
+        for j in range(self.dtcwt.J):
+            y_phi = x_phi * 0
+            y_psis = [x_psis[k] * (j==k) for k in range(self.dtcwt.J)]
+            y_j_hat = torch.abs(torch.fft.fft(idtcwt(y_phi, y_psis).squeeze()))
+            ys.append(y_j_hat)
+
+        lp_psis = [x_psis[k] * 0 for k in range(self.dtcwt.J)]
+        y_lp_hat = torch.abs(torch.fft.fft(idtcwt(x_phi, lp_psis).squeeze()))
+        ys.append(y_lp_hat)
+
+        # Stack tensors to create a 2D tensor where each row is a tensor from the list
+        ys = torch.stack(ys)[:, :N//2]
+        # Define the threshold
+        threshold = 0.2
+        # Apply the threshold
+        valid_mask = ys >= threshold
+        ys = ys * valid_mask.float()
+        # Find the subbands of each frequency
+        max_values, max_indices = torch.max(ys, dim=0)
+        # Find the boundaries of the subbands
+        boundaries = torch.where(max_indices[:-1] != max_indices[1:])[0] + 1
+        boundaries = boundaries / N
+        boundaries = torch.cat((torch.tensor([0.]), boundaries, torch.tensor([0.5])))
+        return boundaries.tolist()
 
 
 class ModulusStable(torch.autograd.Function):
