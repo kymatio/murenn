@@ -89,7 +89,7 @@ class MuReNNDirect(torch.nn.Module):
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
-    
+
     def to_conv1d(self):
         """
         Compute the single-resolution equivalent impulse response of the MuReNN layer.
@@ -154,7 +154,7 @@ class MuReNNDirect(torch.nn.Module):
 
         dtcwt = self.dtcwt
         idtcwt = murenn.DTCWTInverse(
-            self.dtcwt.J, 
+            J = self.dtcwt.J, 
             alternate_gh=False, 
         )
         # Compute the DTCWT of the impulse signal
