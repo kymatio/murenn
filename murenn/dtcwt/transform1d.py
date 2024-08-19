@@ -188,6 +188,49 @@ class DTCWTDirect(DTCWT):
         return yl, yh
 
 
+    @property
+    def subbands(self):
+        """
+        Return the subbands boundaries.
+        """
+        N = 2 ** (self.J + 4)
+        x = torch.zeros(1, 1, N)
+        x[0, 0, N//2] = 1
+
+        idtcwt = DTCWTInverse(
+            J = self.J, 
+            alternate_gh=self.alternate_gh, 
+        )
+        # Compute the DTCWT of the impulse signal
+        x_phi, x_psis = self(x)
+        ys = []
+
+        for j in range(self.J):
+            y_phi = x_phi * 0
+            y_psis = [x_psis[k] * (j==k) for k in range(self.J)]
+            y_j_hat = torch.abs(torch.fft.fft(idtcwt(y_phi, y_psis).squeeze()))
+            ys.append(y_j_hat)
+
+        lp_psis = [x_psis[k] * 0 for k in range(self.J)]
+        y_lp_hat = torch.abs(torch.fft.fft(idtcwt(x_phi, lp_psis).squeeze()))
+        ys.append(y_lp_hat)
+
+        # Stack tensors to create a 2D tensor where each row is a tensor from the list
+        ys = torch.stack(ys)[:, :N//2]
+        # Define the threshold
+        threshold = 0.2
+        # Apply the threshold
+        valid_mask = ys >= threshold
+        ys = ys * valid_mask.float()
+        # Find the subbands of each frequency
+        max_values, max_indices = torch.max(ys, dim=0)
+        # Find the boundaries of the subbands
+        boundaries = torch.where(max_indices[:-1] != max_indices[1:])[0] + 1
+        boundaries = boundaries / N
+        boundaries = torch.cat((boundaries, torch.tensor([0.5])))
+        return boundaries.tolist()
+
+
 class DTCWTInverse(DTCWT):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
     should be initialized in the same manner as DTCWTDirect.
