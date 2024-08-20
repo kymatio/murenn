@@ -158,6 +158,6 @@ def test_hz_to_octs(J):
     # Test with a very small frequency, expecting it to map to the highest subband index
     assert dtcwt.hz_to_octs([1e-5], sr) == [J]
     # Test with a frequency just above the Nyquist frequency, expecting it to map to -1 (out of range)
-    assert dtcwt.hz_to_octs([nyquist+1], sr) == [-1]
+    assert dtcwt.hz_to_octs([nyquist+1e-5], sr) == [-1]
     # Test with a frequency just below the Nyquist frequency, expecting it to map to the lowest subband index
-    assert dtcwt.hz_to_octs([nyquist-1], sr) == [0]
+    assert dtcwt.hz_to_octs([nyquist-1e-5], sr) == [0]
