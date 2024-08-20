@@ -1,6 +1,7 @@
 import numpy as np
 import dtcwt
 import torch.nn
+import bisect
 
 from murenn.dtcwt.lowlevel import prep_filt
 from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
@@ -193,6 +194,7 @@ class DTCWTDirect(DTCWT):
         """
         Return the subbands boundaries.
         """
+
         N = 2 ** (self.J + 4)
         x = torch.zeros(1, 1, N)
         x[0, 0, N//2] = 1
@@ -227,8 +229,30 @@ class DTCWTDirect(DTCWT):
         # Find the boundaries of the subbands
         boundaries = torch.where(max_indices[:-1] != max_indices[1:])[0] + 1
         boundaries = boundaries / N
-        boundaries = torch.cat((boundaries, torch.tensor([0.5])))
+        boundaries = torch.cat((torch.tensor([0.]), boundaries, torch.tensor([0.5]))).flip(dims=(0,))
         return boundaries.tolist()
+    
+
+    def hz_to_octs(self, frequencies, sr=1.0):
+        """
+        Convert a list of frequencies to their corresponding octave subband indices.
+
+        Parameters:
+        frequencies (list of float): List of frequencies to convert.
+        sr (float): Sampling rate, default is 1.0.
+
+        Returns:
+        list of int: List of octave subband indices corresponding to the input frequencies
+            -1 indicates out of range.
+        """
+        subbands = [boundary * sr for boundary in self.subbands]
+        subbands.reverse()
+        js = []
+        for freq in frequencies:
+            i = bisect.bisect_left(subbands, freq)
+            j = len(subbands) - i - 1 if i > 0 else -1
+            js.append(j)
+        return js
 
 
 class DTCWTInverse(DTCWT):

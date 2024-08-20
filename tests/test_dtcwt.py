@@ -134,3 +134,30 @@ def test_avrg_energy(alternate_gh):
         P_Ux = P_Ux + Ppsi_j
     ratio = P_Ux / P_x
     assert torch.abs(ratio - 1) <= 0.01
+
+
+@pytest.mark.parametrize("J", list(range(1, 10)))
+def test_subbands(J):
+    tfm = murenn.DTCWT(J=J)
+    subbands = tfm.subbands
+    # Test the number of subbands
+    # There are J band-pass subbands and 1 low-pass subband, so J+2 subbands boundaries in total.
+    assert len(subbands) == J + 2
+    # Test the min/max value
+    assert min(subbands) == 0.
+    assert max(subbands) == 0.5
+    # Check that it's sorted
+    assert all(subbands[i] > subbands[i+1] for i in range(len(subbands)-1)
+    )
+
+@pytest.mark.parametrize("J", list(range(1, 10)))
+def test_hz_to_octs(J):
+    sr = 16000
+    nyquist = 8000
+    dtcwt = murenn.DTCWT(J = J)
+    # Test with a very small frequency, expecting it to map to the highest subband index
+    assert dtcwt.hz_to_octs([1e-5], sr) == [J]
+    # Test with a frequency just above the Nyquist frequency, expecting it to map to -1 (out of range)
+    assert dtcwt.hz_to_octs([nyquist+1], sr) == [-1]
+    # Test with a frequency just below the Nyquist frequency, expecting it to map to the lowest subband index
+    assert dtcwt.hz_to_octs([nyquist-1], sr) == [0]
