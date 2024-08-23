@@ -32,6 +32,7 @@ class MuReNNDirect(torch.nn.Module):
             raise ValueError("J_phi must be greater or equal to J")
         self.T = [T*self.Q[j] for j in range(J)]
         self.in_channels = in_channels
+        self.padding_mode = padding_mode
         down = []
         conv1d = []
         self.dtcwt = murenn.DTCWT(
@@ -88,6 +89,7 @@ class MuReNNDirect(torch.nn.Module):
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
+
     def to_conv1d(self):
         """
         Compute the single-resolution equivalent impulse response of the MuReNN layer.

@@ -1,6 +1,7 @@
 import numpy as np
 import dtcwt
 import torch.nn
+import bisect
 
 from murenn.dtcwt.lowlevel import prep_filt
 from murenn.dtcwt.transform_funcs import FWD_J1, FWD_J2PLUS, INV_J1, INV_J2PLUS
@@ -186,6 +187,72 @@ class DTCWTDirect(DTCWT):
         else:
             yl, yh = x_phi, x_psis
         return yl, yh
+
+
+    @property
+    def subbands(self):
+        """
+        Return the subbands boundaries.
+        """
+
+        N = 2 ** (self.J + 4)
+        x = torch.zeros(1, 1, N)
+        x[0, 0, N//2] = 1
+
+        idtcwt = DTCWTInverse(
+            J = self.J, 
+            alternate_gh=self.alternate_gh, 
+        )
+        # Compute the DTCWT of the impulse signal
+        x_phi, x_psis = self(x)
+        ys = []
+
+        for j in range(self.J):
+            y_phi = x_phi * 0
+            y_psis = [x_psis[k] * (j==k) for k in range(self.J)]
+            y_j_hat = torch.abs(torch.fft.fft(idtcwt(y_phi, y_psis).squeeze()))
+            ys.append(y_j_hat)
+
+        lp_psis = [x_psis[k] * 0 for k in range(self.J)]
+        y_lp_hat = torch.abs(torch.fft.fft(idtcwt(x_phi, lp_psis).squeeze()))
+        ys.append(y_lp_hat)
+
+        # Stack tensors to create a 2D tensor where each row is a tensor from the list
+        ys = torch.stack(ys)[:, :N//2]
+        # Define the threshold
+        threshold = 0.2
+        # Apply the threshold
+        valid_mask = ys >= threshold
+        ys = ys * valid_mask.float()
+        # Find the subbands of each frequency
+        max_values, max_indices = torch.max(ys, dim=0)
+        # Find the boundaries of the subbands
+        boundaries = torch.where(max_indices[:-1] != max_indices[1:])[0] + 1
+        boundaries = boundaries / N
+        boundaries = torch.cat((torch.tensor([0.]), boundaries, torch.tensor([0.5]))).flip(dims=(0,))
+        return boundaries.tolist()
+    
+
+    def hz_to_octs(self, frequencies, sr=1.0):
+        """
+        Convert a list of frequencies to their corresponding octave subband indices.
+
+        Parameters:
+        frequencies (list of float): List of frequencies to convert.
+        sr (float): Sampling rate, default is 1.0.
+
+        Returns:
+        list of int: List of octave subband indices corresponding to the input frequencies
+            -1 indicates out of range.
+        """
+        subbands = [boundary * sr for boundary in self.subbands]
+        subbands.reverse()
+        js = []
+        for freq in frequencies:
+            i = bisect.bisect_left(subbands, freq)
+            j = len(subbands) - i - 1 if i > 0 else -1
+            js.append(j)
+        return js
 
 
 class DTCWTInverse(DTCWT):
