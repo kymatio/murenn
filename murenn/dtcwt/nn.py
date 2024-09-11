@@ -78,8 +78,8 @@ class MuReNNDirect(torch.nn.Module):
         lp, bps = self.dtcwt(x)
         UWx = []
         for j in range(self.dtcwt.J):
-            Wx_j_r = self.conv1d[j](bps[j].real)
-            Wx_j_i = self.conv1d[j](bps[j].imag)
+            Wx_j_r = self.conv1d[j](bps[j].real) + bps[j].real
+            Wx_j_i = self.conv1d[j](bps[j].imag) + bps[j].imag
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
             # Avarange over time
             UWx_j, _ = self.down[j](UWx_j)
