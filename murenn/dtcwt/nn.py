@@ -43,14 +43,6 @@ class MuReNNDirect(torch.nn.Module):
         )
 
         for j in range(J):
-            down_j = murenn.DTCWT(
-                J=J_phi-j,
-                padding_mode=padding_mode,
-                skip_hps=True,
-                alternate_gh=False,
-            )
-            down.append(down_j)
-
             conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=self.Q[j]*in_channels,
@@ -61,6 +53,15 @@ class MuReNNDirect(torch.nn.Module):
             )
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
+        
+        for j in range(J-1):
+            down_j = murenn.DTCWT(
+                J=J_phi-j-1,
+                padding_mode=padding_mode,
+                skip_hps=True,
+                alternate_gh=False,
+            )
+            down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
         self.conv1d = torch.nn.ParameterList(conv1d)
@@ -78,15 +79,23 @@ class MuReNNDirect(torch.nn.Module):
         assert self.in_channels == x.shape[1]
         lp, bps = self.dtcwt(x)
         UWx = []
-        for j in range(self.dtcwt.J):
-            Wx_j_r = self.conv1d[j](bps[j].real) + bps[j].real
-            Wx_j_i = self.conv1d[j](bps[j].imag) + bps[j].imag
+        for j in range(self.dtcwt.J-1):
+            Wx_j_r = self.conv1d[j](bps[j].real)
+            Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
-            # Avarange over time
             UWx_j, _ = self.down[j](UWx_j)
+            UWx_j = ModulusStable.apply(UWx_j[:,:,::2], UWx_j[:,:,1::2])
             B, _, N = UWx_j.shape
             UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
+
+        Wx_j_r = self.conv1d[-1](bps[-1].real)
+        Wx_j_i = self.conv1d[-1](bps[-1].imag)
+        UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
+        B, _, N = UWx_j.shape
+        UWx_j = UWx_j.view(B, self.in_channels, self.Q[-1], N)
+        UWx.append(UWx_j)
+        
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
