@@ -33,15 +33,15 @@ def test_direct_diff():
     J, Q, T = 3, 4, 4
     B, C, N = 2, 3, 2**(J+4)
     x = torch.zeros(B, C, N)
-    graph = murenn.MuReNNDirect(
+    tfm = murenn.MuReNNDirect(
         J=J,
         Q=Q,
         T=T,
         in_channels=C,
     )
-    y = graph(x)
+    y = tfm(x)
     y.mean().backward()
-    for conv1d in graph.conv1d:
+    for conv1d in tfm.conv1d:
         assert conv1d.weight.grad != None
 
 

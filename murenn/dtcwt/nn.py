@@ -39,7 +39,6 @@ class MuReNNDirect(torch.nn.Module):
             J=J,
             padding_mode=padding_mode,
             alternate_gh=False,
-            skip_hps=True,
         )
 
         for j in range(J):
