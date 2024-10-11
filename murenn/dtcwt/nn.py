@@ -52,14 +52,8 @@ class MuReNNDirect(torch.nn.Module):
             )
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
-        
-        for j in range(J-1):
-            down_j = murenn.DTCWT(
-                J=J_phi-j-1,
-                padding_mode=padding_mode,
-                skip_hps=True,
-                alternate_gh=False,
-            )
+    
+            down_j = DownSampling(J_phi - j)
             down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
@@ -78,27 +72,17 @@ class MuReNNDirect(torch.nn.Module):
         assert self.in_channels == x.shape[1]
         lp, bps = self.dtcwt(x)
         UWx = []
-        for j in range(self.dtcwt.J-1):
+        for j in range(self.dtcwt.J):
             Wx_j_r = self.conv1d[j](bps[j].real)
             Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
-            UWx_j, _ = self.down[j](UWx_j)
-            UWx_j = ModulusStable.apply(UWx_j[:,:,::2], UWx_j[:,:,1::2])
+            UWx_j = self.down[j](UWx_j)
             B, _, N = UWx_j.shape
             UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
-
-        Wx_j_r = self.conv1d[-1](bps[-1].real)
-        Wx_j_i = self.conv1d[-1](bps[-1].imag)
-        UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
-        B, _, N = UWx_j.shape
-        UWx_j = UWx_j.view(B, self.in_channels, self.Q[-1], N)
-        UWx.append(UWx_j)
-        
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
-
     def to_conv1d(self):
         """
         Compute the single-resolution equivalent impulse response of the MuReNN layer.
@@ -178,3 +162,28 @@ class ModulusStable(torch.autograd.Function):
             dxr.masked_fill_(output == 0, 0)
             dxi.masked_fill_(output == 0, 0)
         return dxr, dxi
+
+
+class DownSampling(torch.nn.Module):
+    """
+    Downsample the input signal by a factor of 2**J_phi.
+    --------------------
+    Args:
+        J_phi (int): Number of levels of downsampling.
+    """
+    def __init__(self, J_phi):
+        super().__init__()
+        self.J_phi = J_phi
+        # We are using a 13-tap low-pass filter
+        self.phi = murenn.DTCWT(
+            J=1,
+            level1="near_sym_b",
+            skip_hps=True,
+            padding_mode="zeros",
+        )
+
+    def forward(self, x):
+        for j in range(self.J_phi):
+            x, _ = self.phi(x)
+            x = x[:,:,::2]
+        return x
