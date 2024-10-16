@@ -42,14 +42,6 @@ class MuReNNDirect(torch.nn.Module):
         )
 
         for j in range(J):
-            down_j = murenn.DTCWT(
-                J=J_phi-j,
-                padding_mode=padding_mode,
-                skip_hps=True,
-                alternate_gh=False,
-            )
-            down.append(down_j)
-
             conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
                 out_channels=self.Q[j]*in_channels,
@@ -60,6 +52,9 @@ class MuReNNDirect(torch.nn.Module):
             )
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
+    
+            down_j = Downsampling(J_phi - j)
+            down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
         self.conv1d = torch.nn.ParameterList(conv1d)
@@ -81,15 +76,13 @@ class MuReNNDirect(torch.nn.Module):
             Wx_j_r = self.conv1d[j](bps[j].real)
             Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
-            # Avarange over time
-            UWx_j, _ = self.down[j](UWx_j)
+            UWx_j = self.down[j](UWx_j)
             B, _, N = UWx_j.shape
             UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
-
     def to_conv1d(self):
         """
         Compute the single-resolution equivalent impulse response of the MuReNN layer.
@@ -169,3 +162,30 @@ class ModulusStable(torch.autograd.Function):
             dxr.masked_fill_(output == 0, 0)
             dxi.masked_fill_(output == 0, 0)
         return dxr, dxi
+
+
+class Downsampling(torch.nn.Module):
+    """
+    Downsample the input signal by a factor of 2**J_phi.
+    --------------------
+    Args:
+        J_phi (int): Number of levels of downsampling.
+    """
+    def __init__(self, J_phi):
+        super().__init__()
+        self.J_phi = J_phi
+        # We are using a 13-tap low-pass filter
+        self.phi = murenn.DTCWT(
+            J=1,
+            level1="near_sym_b",
+            skip_hps=True,
+            padding_mode="zeros",
+        )
+
+
+    def forward(self, x):
+        for j in range(self.J_phi):
+            x, _ = self.phi(x)
+            # Normalize the coefficients
+            x = x[:,:,::2] / math.sqrt(2)
+        return x
