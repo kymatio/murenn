@@ -53,7 +53,7 @@ class MuReNNDirect(torch.nn.Module):
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
     
-            down_j = DownSampling(J_phi - j)
+            down_j = Downsampling(J_phi - j)
             down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
@@ -164,7 +164,7 @@ class ModulusStable(torch.autograd.Function):
         return dxr, dxi
 
 
-class DownSampling(torch.nn.Module):
+class Downsampling(torch.nn.Module):
     """
     Downsample the input signal by a factor of 2**J_phi.
     --------------------
@@ -182,8 +182,10 @@ class DownSampling(torch.nn.Module):
             padding_mode="zeros",
         )
 
+
     def forward(self, x):
         for j in range(self.J_phi):
             x, _ = self.phi(x)
-            x = x[:,:,::2]
+            # Normalize the coefficients
+            x = x[:,:,::2] / math.sqrt(2)
         return x
