@@ -185,6 +185,5 @@ class Downsampling(torch.nn.Module):
     def forward(self, x):
         for j in range(self.J_phi):
             x, _ = self.phi(x)
-            # Normalize the coefficients
-            x = x[:,:,::2] / math.sqrt(2)
+            x = x[:,:,::2]
         return x
