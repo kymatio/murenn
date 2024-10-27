@@ -178,7 +178,6 @@ class Downsampling(torch.nn.Module):
             J=1,
             level1="near_sym_b",
             skip_hps=True,
-            padding_mode="zeros",
         )
 
 
