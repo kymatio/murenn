@@ -136,9 +136,14 @@ class DTCWTDirect(DTCWT):
             x = torch.cat((x, x[:,:,-1:]), dim=-1)
 
         ## LEVEL 1 ##
+        # if self.normalize:
+        #     x = 1/np.sqrt(2) * x
         x_phi, x_psi_r, x_psi_i = FWD_J1.apply(
             x, self.h0o, self.h1o, self.skip_hps[0], self.padding_mode
         )
+        if self.normalize:
+            x_psi_r = 1/np.sqrt(2) * x_psi_r
+            x_psi_i = 1/np.sqrt(2) * x_psi_i
         x_psis.append(x_psi_r + 1j * x_psi_i)
         if self.include_scale[0]:
             x_phis.append(x_phi)
@@ -157,8 +162,8 @@ class DTCWTDirect(DTCWT):
             # Ensure the lowpass is divisible by 4
             if x_phi.shape[-1] % 4 != 0:
                 x_phi = torch.cat((x_phi[:,:,0:1], x_phi, x_phi[:,:,-1:]), dim=-1)
-            if self.normalize:
-                x_phi = 1/np.sqrt(2) * x_phi
+            # if self.normalize:
+            #     x_phi = 1/np.sqrt(2) * x_phi
             x_phi, x_psi_r, x_psi_i = FWD_J2PLUS.apply(
                 x_phi,
                 h0a,
@@ -168,6 +173,12 @@ class DTCWTDirect(DTCWT):
                 self.skip_hps[j],
                 self.padding_mode,
             )
+            if self.normalize:
+                # x_psi_r = 1/np.sqrt(2) * x_psi_r
+                # x_psi_i = 1/np.sqrt(2) * x_psi_i
+                x_phi = 1/np.sqrt(2) * x_phi
+                x_psi_r = 1/2 * x_psi_r
+                x_psi_i = 1/2 * x_psi_i
             if (j % 2 == 1) and self.alternate_gh:
                 # The result is anti-analytic in the Hilbert sense.
                 # We conjugate the result to bring the spectrum back to (0, pi).
@@ -350,6 +361,12 @@ class DTCWTInverse(DTCWT):
             else:
                 g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b
 
+            if self.normalize:
+                # x_psi = np.sqrt(2) * x_psi
+                # x_phi = np.sqrt(2) * x_phi
+                x_psi = 2 * x_psi
+                x_phi = np.sqrt(2) * x_phi
+
             x_psi_r, x_psi_i = x_psi.real, x_psi.imag
             x_phi = INV_J2PLUS.apply(
                 x_phi,
@@ -361,18 +378,21 @@ class DTCWTInverse(DTCWT):
                 g1b,
                 self.padding_mode,
             )
-            if self.normalize:
-                x_phi = np.sqrt(2) * x_phi
+            # if self.normalize:
+            #     x_phi = np.sqrt(2) * x_phi
 
         # LEVEL 1 ##
         if x_phi.shape[-1] != x_psis[0].shape[-1] * 2:
             x_phi = x_phi[:,:,1:-1]
 
+        if self.normalize:
+            x_psis[0] = np.sqrt(2) * x_psis[0]
         x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
-
         x_phi = INV_J1.apply(
             x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode
         )
+        # if self.normalize:
+        #     x_phi = np.sqrt(2) * x_phi
         if self.length:
             x_phi = fix_length(x_phi, size=self.length)
         return x_phi
