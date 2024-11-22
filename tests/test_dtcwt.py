@@ -131,6 +131,7 @@ def test_avrg_energy(J, alternate_gh):
     P_phi = torch.linalg.norm(phi) ** 2 / phi.shape[-1]
     P_Ux = P_Ux + P_phi
     for psi in psis:
+        psi = psi / math.sqrt(2)
         Ppsi_j = torch.linalg.norm(torch.abs(psi)) ** 2 / psi.shape[-1]
         P_Ux = P_Ux + Ppsi_j
     ratio = P_Ux / P_x

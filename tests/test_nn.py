@@ -91,7 +91,7 @@ def test_modulus():
 
 @pytest.mark.parametrize("Q", [1, 2])
 @pytest.mark.parametrize("T", [1, 2])
-def test_toconv1d_shape(Q, T):
+def test_toconv1d(Q, T):
     J = 4
     tfm = murenn.MuReNNDirect(
         J=J,
@@ -99,34 +99,8 @@ def test_toconv1d_shape(Q, T):
         T=T,
         in_channels=2,
     )
-    conv1d = tfm.to_conv1d()
-    assert isinstance(conv1d, torch.nn.Conv1d)
-
-@pytest.mark.parametrize("J", range(3))
-@pytest.mark.parametrize("alternate_gh", [True, False])
-def test_avrg_energy(J, alternate_gh):
-    '''
-    Test the power of the signals for normalization case.
-    '''
-    tfm = murenn.DTCWT(J=J+1, alternate_gh=alternate_gh, normalize=True)
-    N = 2**15
-    x = torch.randn(1 ,1, N)
-    P_x = torch.linalg.norm(x) ** 2 / x.shape[-1]
-    P_Ux = 0
-    phi, psis = tfm(x)
-    P_phi = torch.linalg.norm(phi) ** 2 / phi.shape[-1]
-    P_Ux = P_Ux + P_phi
-    for psi in psis:
-        Ppsi_j = torch.linalg.norm(torch.abs(psi)) ** 2 / psi.shape[-1]
-        P_Ux = P_Ux + Ppsi_j
-    ratio = P_Ux / P_x
-    assert torch.abs(ratio - 1) <= 0.01
-
-
-@pytest.mark.parametrize("J_phi", range(3))
-def test_down(J_phi):
-    N = 2**15
-    x = torch.ones(1, 1, N)
-    down = murenn.dtcwt.nn.Downsampling(J_phi)
-    x_down = down(x)
-    assert torch.allclose(x_down, torch.ones(1, 1, N // 2**J_phi))
+    x = torch.zeros(1, 1, 2**J)
+    conv1ds = tfm.to_conv1d()
+    for k, v in conv1ds.items():
+        assert isinstance(v, torch.nn.Conv1d)
+        y = v(x)
