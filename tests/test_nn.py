@@ -3,7 +3,7 @@ import pytest
 import torch
 import murenn
 
-from murenn.dtcwt.nn import ModulusStable
+from murenn.dtcwt.nn import ModulusStable, Downsampling
 
 
 if torch.cuda.is_available():
@@ -99,8 +99,12 @@ def test_toconv1d(Q, T):
         T=T,
         in_channels=2,
     )
-    x = torch.zeros(1, 1, 2**J)
+    N = 2**J*16
+    x = torch.randn(1, 1, N)
     conv1ds = tfm.to_conv1d()
-    for k, v in conv1ds.items():
-        assert isinstance(v, torch.nn.Conv1d)
-        y = v(x)
+    for conv1d in conv1ds.values():
+        assert isinstance(conv1d, torch.nn.Conv1d)
+        y = conv1d(x)
+        assert isinstance(y, torch.Tensor)
+        assert y.dtype == x.dtype
+        assert y.shape == (1, J*Q, N)

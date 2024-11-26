@@ -74,7 +74,7 @@ class MuReNNDirect(torch.nn.Module):
             Wx_j_r = self.conv1d[j](bps[j].real)
             Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
-            UWx_j = self.down[j](UWx_j) * math.sqrt(2) ** j
+            UWx_j = self.down[j](UWx_j)
             B, _, N = UWx_j.shape
             UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
@@ -90,13 +90,16 @@ class MuReNNDirect(torch.nn.Module):
         δ -------> ψ_j --------> w_jq -------> y_jq
         -------
         Return:
-            conv1d (torch.nn.Conv1d): A Pytorch Conv1d instance with weights initialized to y_jq.
+            conv1ds: A dictionary containing PyTorch Conv1d instances with weights initialized to y_jq.
+                - "complex" (torch.nn.Conv1d): the equivalent complex hybrid filter
+                - "real" (torch.nn.Conv1d): the real part of the hybrid filter
+                - "imag" (torch.nn.Conv1d): the imaginary part of the hybrid filter
         """
 
         device = self.conv1d[0].weight.data.device
         T = self.T  # Filter length
         J = self.dtcwt.J  # Number of levels of decomposition
-        N = 2 ** J * T  # Length of the impulse signal
+        N = 2 ** J * max(T, len(self.dtcwt.g0a))  # Length of the impulse signal
 
         # Generate the impulse signal
         x = torch.zeros(1, self.in_channels, N).to(device)
@@ -109,24 +112,20 @@ class MuReNNDirect(torch.nn.Module):
         phi, psis = self.dtcwt(x)
         zeros_phi = phi.new_zeros(1, 1, phi.shape[-1])
 
-        ws_r, ws_i, ws = [], [], []
+        ws_r, ws_i = [], []
         for j in range(J):
             Wpsi_jr = self.conv1d[j](psis[j].real).reshape(self.in_channels, self.Q[j], -1)
             Wpsi_ji = self.conv1d[j](psis[j].imag).reshape(self.in_channels, self.Q[j], -1)
             for q in range(self.Q[j]):
                 Wpsi_jqr = Wpsi_jr[0, q, :].reshape(1,1,-1)
                 Wpsi_jqi = Wpsi_ji[0, q, :].reshape(1,1,-1)
-                Wpsi_jq = torch.complex(Wpsi_jqr, Wpsi_jqi)
 
                 Wpsis_r = [Wpsi_jqr * (1+0j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
                 Wpsis_i = [Wpsi_jqi * (0+1j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
-                Wpsis = [Wpsi_jq if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
 
                 ws_r.append(inv(zeros_phi, Wpsis_r))
                 ws_i.append(inv(zeros_phi, Wpsis_i))
-                ws.append(inv(zeros_phi, Wpsis))
         
-        ws = torch.cat(ws, dim=0)
         ws_r = torch.cat(ws_r, dim=0)
         ws_i = torch.cat(ws_i, dim=0)
 
@@ -142,7 +141,7 @@ class MuReNNDirect(torch.nn.Module):
             return conv1d
 
         return {
-            "complex": create_conv1d(ws),
+            "complex": create_conv1d(ws_r+ws_i),
             "real": create_conv1d(ws_r),
             "imag": create_conv1d(ws_i),
         }
@@ -198,6 +197,8 @@ class Downsampling(torch.nn.Module):
     def forward(self, x):
         for j in range(self.J_phi):
             x, _ = self.phi(x)
-            # Normalize the coefficients
             x = x[:,:,::2]
-        return self.relu(x)
+        # ReLU ensures the output, which is a smoothed approximation
+        # of the modulus, is non-negative
+        x = self.relu(x)
+        return x

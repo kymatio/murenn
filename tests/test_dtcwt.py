@@ -81,13 +81,13 @@ def test_skip_hps(skip_hps, normalize):
     assert torch.allclose(lp, lp_ap)
 
 
-@pytest.mark.parametrize("J", range(3))
+@pytest.mark.parametrize("J", range(1,4))
 @pytest.mark.parametrize("alternate_gh", [True, False])
 def test_phi(J, alternate_gh):
     '''
     Test the low-pass output phi doesn't diverge.
     '''
-    tfm = murenn.DTCWT(J=J+1, alternate_gh=alternate_gh, include_scale=True, skip_hps=True)
+    tfm = murenn.DTCWT(J=J, alternate_gh=alternate_gh, include_scale=True, skip_hps=True)
     N = 2**15
     x = torch.ones(1, 1, N)
     phis, _ = tfm(x)
@@ -116,13 +116,13 @@ def test_energy_preservation(alternate_gh):
     assert torch.abs(ratio - 1) <= 0.01
 
 
-@pytest.mark.parametrize("J", range(3))
+@pytest.mark.parametrize("J", range(1, 4))
 @pytest.mark.parametrize("alternate_gh", [True, False])
 def test_avrg_energy(J, alternate_gh):
     '''
     Test the power of the signals for normalization case.
     '''
-    tfm = murenn.DTCWT(J=J+1, alternate_gh=alternate_gh, normalize=True)
+    tfm = murenn.DTCWT(J=J, alternate_gh=alternate_gh, normalize=True)
     N = 2**15
     x = torch.randn(1 ,1, N)
     P_x = torch.linalg.norm(x) ** 2 / x.shape[-1]
