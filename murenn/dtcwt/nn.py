@@ -86,8 +86,8 @@ class MuReNNDirect(torch.nn.Module):
         Compute the single-resolution equivalent impulse response of the MuReNN layer.
         This would be helpful for visualization in Fourier domain, for receptive fields,
         and for comparing computational costs.
-           DTCWT        conv1d        IDTCWT
-        δ -------> ψ_j --------> w_jq -------> y_jq
+           conv1d        IDTCWT
+        δ --------> w_jq -------> y_jq
         -------
         Return:
             conv1ds: A dictionary containing PyTorch Conv1d instances with weights initialized to y_jq.
@@ -99,32 +99,33 @@ class MuReNNDirect(torch.nn.Module):
         device = self.conv1d[0].weight.data.device
         T = self.T  # Filter length
         J = self.dtcwt.J  # Number of levels of decomposition
-        N = 2 ** J * max(T, len(self.dtcwt.g0a))  # Length of the impulse signal
+        N = 2 ** J * max(T, len(self.dtcwt.g0a))  # Hybrid filter length
 
-        # Generate the impulse signal
+        # Generate a zero signal
         x = torch.zeros(1, self.in_channels, N).to(device)
-        x[:, :, N//2] = 1
 
         # Initialize the inverse DTCWT
         inv = murenn.IDTCWT(J=J, alternate_gh=False).to(device)
 
-        # Get DTCWT impulse reponses
+        # Obtain two dual-tree response of the zero signal
         phi, psis = self.dtcwt(x)
-        zeros_phi = phi.new_zeros(1, 1, phi.shape[-1])
+        phi = phi[0,0,:].reshape(1,1,-1) # We only need the first channel
 
         ws_r, ws_i = [], []
         for j in range(J):
-            Wpsi_jr = self.conv1d[j](psis[j].real).reshape(self.in_channels, self.Q[j], -1)
-            Wpsi_ji = self.conv1d[j](psis[j].imag).reshape(self.in_channels, self.Q[j], -1)
+            # Set the level-j response to a impulse signal
+            psi_j = psis[j].real
+            psi_j[:, :, psi_j.shape[2]//2] = 1 / math.sqrt(2) ** j # The energy gain
+            # Convolve the impulse signal with the conv1d filter
+            Wpsi_j = self.conv1d[j](psi_j).reshape(self.in_channels, self.Q[j], -1)
+            # Apply dual-tree invert transform to obtain the hybrid wavelets.
             for q in range(self.Q[j]):
-                Wpsi_jqr = Wpsi_jr[0, q, :].reshape(1,1,-1)
-                Wpsi_jqi = Wpsi_ji[0, q, :].reshape(1,1,-1)
+                Wpsi_jq = Wpsi_j[0, q, :].reshape(1,1,-1)
+                Wpsis_r = [Wpsi_jq * (1+0j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
+                Wpsis_i = [Wpsi_jq * (0+1j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
 
-                Wpsis_r = [Wpsi_jqr * (1+0j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
-                Wpsis_i = [Wpsi_jqi * (0+1j) if k == j else psis[k].new_zeros(1,1,psis[k].shape[-1]) for k in range(J)]
-
-                ws_r.append(inv(zeros_phi, Wpsis_r))
-                ws_i.append(inv(zeros_phi, Wpsis_i))
+                ws_r.append(inv(phi, Wpsis_r))
+                ws_i.append(inv(phi, Wpsis_i))
         
         ws_r = torch.cat(ws_r, dim=0)
         ws_i = torch.cat(ws_i, dim=0)
@@ -141,7 +142,7 @@ class MuReNNDirect(torch.nn.Module):
             return conv1d
 
         return {
-            "complex": create_conv1d(ws_r+ws_i),
+            "complex": create_conv1d(ws_r+1j*ws_i),
             "real": create_conv1d(ws_r),
             "imag": create_conv1d(ws_i),
         }

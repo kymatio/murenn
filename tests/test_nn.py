@@ -2,6 +2,7 @@ import murenn.dtcwt
 import pytest
 import torch
 import murenn
+import math
 
 from murenn.dtcwt.nn import ModulusStable, Downsampling
 
@@ -90,7 +91,7 @@ def test_modulus():
     assert torch.max(torch.abs(x0i.grad)) <= 1e-7
 
 @pytest.mark.parametrize("Q", [1, 2])
-@pytest.mark.parametrize("T", [1, 2])
+@pytest.mark.parametrize("T", [2, 3])
 def test_toconv1d(Q, T):
     J = 4
     tfm = murenn.MuReNNDirect(
@@ -100,11 +101,29 @@ def test_toconv1d(Q, T):
         in_channels=2,
     )
     N = 2**J*16
-    x = torch.randn(1, 1, N)
+    x = torch.zeros(1, 1, N)
+    x[:,:,N//2] = 1
     conv1ds = tfm.to_conv1d()
-    for conv1d in conv1ds.values():
+    for conv1d in [conv1ds["real"], conv1ds["imag"]]:
         assert isinstance(conv1d, torch.nn.Conv1d)
         y = conv1d(x)
         assert isinstance(y, torch.Tensor)
         assert y.dtype == x.dtype
         assert y.shape == (1, J*Q, N)
+    
+    # Test the energy gain
+    tfm = murenn.MuReNNDirect(
+        J=J,
+        Q=1,
+        T=1,
+        in_channels=1,
+    )
+    # Initialize the learnable filters with dirac
+    for conv1d in tfm.conv1d:
+        torch.nn.init.dirac_(conv1d.weight)
+    # Get the dtcwt filters
+    psis = tfm.to_conv1d()
+    # Test the energy crossing subbands
+    y = psis["complex"](torch.complex(x, x)/math.sqrt(2))
+    energy = torch.linalg.norm(y, dim=-1)
+    assert torch.allclose(energy, torch.ones(1, J), atol=0.1)
