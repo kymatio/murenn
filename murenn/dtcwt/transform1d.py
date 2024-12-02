@@ -16,7 +16,7 @@ class DTCWT(torch.nn.Module):
         J=8,
         skip_hps=False,
         include_scale=False,
-        alternate_gh=True,
+        alternate_gh=False,
         padding_mode="symmetric",
         normalize=True,
     ):
