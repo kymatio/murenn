@@ -99,7 +99,7 @@ class MuReNNDirect(torch.nn.Module):
         device = self.conv1d[0].weight.data.device
         T = self.T  # Filter length
         J = self.dtcwt.J  # Number of levels of decomposition
-        N = 2 ** J * max(T, len(self.dtcwt.g0a))  # Hybrid filter length
+        N = 2 ** J * max(T, self.dtcwt.g0a.shape[-1]) * 2  # Hybrid filter length
 
         # Generate a zero signal
         x = torch.zeros(1, self.in_channels, N).to(device)
