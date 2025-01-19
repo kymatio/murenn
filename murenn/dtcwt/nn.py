@@ -59,7 +59,7 @@ class MuReNNDirect(torch.nn.Module):
             down.append(down_j)
         
         if self.include_lp:
-            down.append(Downsampling(J_phi))
+            down.append(Downsampling(J_phi - J + 2))
 
         self.down = torch.nn.ModuleList(down)
         self.conv1d = torch.nn.ParameterList(conv1d)
@@ -88,7 +88,7 @@ class MuReNNDirect(torch.nn.Module):
             UWx.append(UWx_j)
             
         if self.include_lp:
-            UWx.append(self.down[-1](lp))
+            UWx.append(self.down[-1](lp).view(B, self.in_channels, 1, N))
 
         UWx = torch.cat(UWx, dim=2)
         return UWx
