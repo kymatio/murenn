@@ -11,12 +11,14 @@ class MuReNNDirect(torch.nn.Module):
         J (int): Number of levels (octaves) in the DTCWT decomposition.
         Q (int or list): Number of Conv1D filters per octave.
         T (int): The Conv1d kernel size.
-        J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J.
         in_channels (int): Number of channels in the input signal.
+        J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J-1.
+        mu (float): Weighting factor for the indentity mapping. Default is 1.
+        include_lp (bool): Whether to include the low-pass component in the output. Default is False.
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
     """
-    def __init__(self, *, J, Q, T, in_channels, J_phi=None, padding_mode="symmetric"):
+    def __init__(self, *, J, Q, T, in_channels, J_phi=None, mu=1, include_lp=False, padding_mode="symmetric"):
         super().__init__()
         if isinstance(Q, int):
             self.Q = [Q for j in range(J)]
@@ -26,12 +28,14 @@ class MuReNNDirect(torch.nn.Module):
         else:
             raise TypeError(f"Q must to be int or list, got {type(Q)}")
         if J_phi is None:
-            J_phi = J
-        if J_phi < J:
-            raise ValueError("J_phi must be greater or equal to J")
+            J_phi = J - 1
+        if J_phi < (J - 1):
+            raise ValueError("J_phi must be greater or equal to J-1")
         self.T = T
         self.in_channels = in_channels
         self.padding_mode = padding_mode
+        self.mu = mu
+        self.include_lp = include_lp
         down = []
         conv1d = []
         self.dtcwt = murenn.DTCWT(
@@ -51,8 +55,11 @@ class MuReNNDirect(torch.nn.Module):
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
     
-            down_j = Downsampling(J_phi - j -1)
+            down_j = Downsampling(J_phi - j)
             down.append(down_j)
+        
+        if self.include_lp:
+            down.append(Downsampling(J_phi))
 
         self.down = torch.nn.ModuleList(down)
         self.conv1d = torch.nn.ParameterList(conv1d)
@@ -69,15 +76,20 @@ class MuReNNDirect(torch.nn.Module):
         """
         assert self.in_channels == x.shape[1]
         lp, bps = self.dtcwt(x)
+
         UWx = []
         for j in range(self.dtcwt.J):
-            Wx_j_r = self.conv1d[j](bps[j].real) + bps[j].real.repeat(1, self.Q[j], 1)
-            Wx_j_i = self.conv1d[j](bps[j].imag) + bps[j].imag.repeat(1, self.Q[j], 1)
+            Wx_j_r = self.conv1d[j](bps[j].real) + self.mu * bps[j].real.repeat(1, self.Q[j], 1)
+            Wx_j_i = self.conv1d[j](bps[j].imag) + self.mu * bps[j].imag.repeat(1, self.Q[j], 1)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
             UWx_j = self.down[j](UWx_j)
             B, _, N = UWx_j.shape
             UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
+            
+        if self.include_lp:
+            UWx.append(self.down[-1](lp))
+
         UWx = torch.cat(UWx, dim=2)
         return UWx
     
