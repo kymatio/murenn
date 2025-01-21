@@ -46,10 +46,9 @@ class MuReNNDirect(torch.nn.Module):
         for j in range(J):
             conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
-                out_channels=self.Q[j]*in_channels,
+                out_channels=self.Q[j],
                 kernel_size=self.T,
                 bias=False,
-                groups=in_channels,
                 padding="same",
             )
             torch.nn.init.normal_(conv1d_j.weight)
@@ -79,18 +78,18 @@ class MuReNNDirect(torch.nn.Module):
 
         UWx = []
         for j in range(self.dtcwt.J):
-            Wx_j_r = self.conv1d[j](bps[j].real) + self.mu * bps[j].real.repeat(1, self.Q[j], 1)
-            Wx_j_i = self.conv1d[j](bps[j].imag) + self.mu * bps[j].imag.repeat(1, self.Q[j], 1)
+            Wx_j_r = self.conv1d[j](bps[j].real)
+            Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
             UWx_j = self.down[j](UWx_j)
-            B, _, N = UWx_j.shape
-            UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
+            # B, _, N = UWx_j.shape
+            # UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
             
         if self.include_lp:
-            UWx.append(self.down[-1](lp).view(B, self.in_channels, 1, N))
+            UWx.append(self.down[-1](lp))
 
-        UWx = torch.cat(UWx, dim=2)
+        UWx = torch.cat(UWx, dim=1)
         return UWx
     
     def to_conv1d(self):
@@ -129,7 +128,7 @@ class MuReNNDirect(torch.nn.Module):
             psi_j = psis[j].real
             psi_j[:, :, psi_j.shape[2]//2] = 1 / math.sqrt(2) ** j # The energy gain
             # Convolve the impulse signal with the conv1d filter
-            Wpsi_j = self.conv1d[j](psi_j).reshape(self.in_channels, self.Q[j], -1)
+            Wpsi_j = self.conv1d[j](psi_j).reshape(1, self.Q[j], -1)
             # Apply dual-tree invert transform to obtain the hybrid wavelets.
             for q in range(self.Q[j]):
                 Wpsi_jq = Wpsi_j[0, q, :].reshape(1,1,-1)
