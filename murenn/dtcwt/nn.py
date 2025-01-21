@@ -13,12 +13,11 @@ class MuReNNDirect(torch.nn.Module):
         T (int): The Conv1d kernel size.
         in_channels (int): Number of channels in the input signal.
         J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J-1.
-        mu (float): Weighting factor for the indentity mapping. Default is 1.
         include_lp (bool): Whether to include the low-pass component in the output. Default is False.
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
     """
-    def __init__(self, *, J, Q, T, in_channels, J_phi=None, mu=1, include_lp=False, padding_mode="symmetric"):
+    def __init__(self, *, J, Q, T, in_channels, J_phi=None, include_lp=False, padding_mode="symmetric"):
         super().__init__()
         if isinstance(Q, int):
             self.Q = [Q for j in range(J)]
@@ -34,7 +33,6 @@ class MuReNNDirect(torch.nn.Module):
         self.T = T
         self.in_channels = in_channels
         self.padding_mode = padding_mode
-        self.mu = mu
         self.include_lp = include_lp
         down = []
         conv1d = []
@@ -56,9 +54,6 @@ class MuReNNDirect(torch.nn.Module):
     
             down_j = Downsampling(J_phi - j)
             down.append(down_j)
-        
-        if self.include_lp:
-            down.append(Downsampling(J_phi - J + 2))
 
         self.down = torch.nn.ModuleList(down)
         self.conv1d = torch.nn.ParameterList(conv1d)
@@ -82,12 +77,7 @@ class MuReNNDirect(torch.nn.Module):
             Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
             UWx_j = self.down[j](UWx_j)
-            # B, _, N = UWx_j.shape
-            # UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
-            
-        if self.include_lp:
-            UWx.append(self.down[-1](lp))
 
         UWx = torch.cat(UWx, dim=1)
         return UWx
