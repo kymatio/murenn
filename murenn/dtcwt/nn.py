@@ -18,7 +18,7 @@ class MuReNNDirect(torch.nn.Module):
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
     """
-    def __init__(self, *, J, Q, T, in_channels, J_phi=None, mu=1, include_lp=False, padding_mode="symmetric"):
+    def __init__(self, *, J, Q, T, in_channels, J_phi=None, include_lp=False, padding_mode="symmetric"):
         super().__init__()
         if isinstance(Q, int):
             self.Q = [Q for j in range(J)]
@@ -34,7 +34,6 @@ class MuReNNDirect(torch.nn.Module):
         self.T = T
         self.in_channels = in_channels
         self.padding_mode = padding_mode
-        self.mu = mu
         self.include_lp = include_lp
         down = []
         conv1d = []
@@ -82,8 +81,6 @@ class MuReNNDirect(torch.nn.Module):
             Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
             UWx_j = self.down[j](UWx_j)
-            # B, _, N = UWx_j.shape
-            # UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
             
         if self.include_lp:

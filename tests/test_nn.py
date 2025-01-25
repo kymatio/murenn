@@ -17,7 +17,8 @@ else:
 @pytest.mark.parametrize("T", [8, 16])
 @pytest.mark.parametrize("padding_mode", ["symmetric", "zeros"])
 @pytest.mark.parametrize("N", list(range(10)))
-def test_direct_shape(J, Q, T, N, padding_mode):
+@pytest.mark.parametrize("include_lp", [True, False])
+def test_direct_shape(J, Q, T, N, padding_mode, include_lp):
     B, C, L = 2, 3, 2**J+N
     x = torch.zeros(B, C, L)
     graph = murenn.MuReNNDirect(
@@ -26,9 +27,13 @@ def test_direct_shape(J, Q, T, N, padding_mode):
         T=T,
         in_channels=C,
         padding_mode=padding_mode,
+        include_lp=include_lp,
     )
     y = graph(x)
-    assert y.shape[:2] == (B, Q*J)
+    if graph.include_lp == False:
+        assert y.shape[:2] == (B, Q * J)
+    else:
+        assert y.shape[:2] == (B, Q * J + C)
     
 
 def test_direct_diff():
@@ -50,7 +55,8 @@ def test_direct_diff():
 @pytest.mark.parametrize("Q", [3, 4])
 @pytest.mark.parametrize("T", [8, 16])
 @pytest.mark.parametrize("N", list(range(5)))
-def test_multi_layers(Q, T, N):
+@pytest.mark.parametrize("include_lp", [True, False])
+def test_multi_layers(Q, T, N, include_lp):
     J = 2
     B, C, L = 2, 3, 2**J+N
     x = torch.zeros(B, C, L)
@@ -61,6 +67,7 @@ def test_multi_layers(Q, T, N):
             Q=Q,
             T=T,
             in_channels=x.shape[1],
+            include_lp=include_lp,
         )
         x = layer_i(x)
 
