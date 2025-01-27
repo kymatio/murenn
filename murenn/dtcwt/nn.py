@@ -11,8 +11,8 @@ class MuReNNDirect(torch.nn.Module):
         J (int): Number of levels (octaves) in the DTCWT decomposition.
         Q (int or list): Number of Conv1D filters per octave.
         T (int): The Conv1d kernel size.
-        J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J.
         in_channels (int): Number of channels in the input signal.
+        J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J-1.
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
     """
@@ -26,9 +26,9 @@ class MuReNNDirect(torch.nn.Module):
         else:
             raise TypeError(f"Q must to be int or list, got {type(Q)}")
         if J_phi is None:
-            J_phi = J
-        if J_phi < J:
-            raise ValueError("J_phi must be greater or equal to J")
+            J_phi = J - 1
+        if J_phi < (J - 1):
+            raise ValueError("J_phi must be greater or equal to J-1")
         self.T = T
         self.in_channels = in_channels
         self.padding_mode = padding_mode
@@ -42,16 +42,15 @@ class MuReNNDirect(torch.nn.Module):
         for j in range(J):
             conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
-                out_channels=self.Q[j]*in_channels,
+                out_channels=self.Q[j],
                 kernel_size=self.T,
                 bias=False,
-                groups=in_channels,
                 padding="same",
             )
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
     
-            down_j = Downsampling(J_phi - j -1)
+            down_j = Downsampling(J_phi - j)
             down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
@@ -69,16 +68,16 @@ class MuReNNDirect(torch.nn.Module):
         """
         assert self.in_channels == x.shape[1]
         lp, bps = self.dtcwt(x)
+
         UWx = []
         for j in range(self.dtcwt.J):
             Wx_j_r = self.conv1d[j](bps[j].real)
             Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
             UWx_j = self.down[j](UWx_j)
-            B, _, N = UWx_j.shape
-            UWx_j = UWx_j.view(B, self.in_channels, self.Q[j], N)
             UWx.append(UWx_j)
-        UWx = torch.cat(UWx, dim=2)
+
+        UWx = torch.cat(UWx, dim=1)
         return UWx
     
     def to_conv1d(self):
@@ -99,7 +98,7 @@ class MuReNNDirect(torch.nn.Module):
         device = self.conv1d[0].weight.data.device
         T = self.T  # Filter length
         J = self.dtcwt.J  # Number of levels of decomposition
-        N = 2 ** J * max(T, len(self.dtcwt.g0a))  # Hybrid filter length
+        N = 2 ** J * max(T, self.dtcwt.g0a.shape[-1]) * 2  # Hybrid filter length
 
         # Generate a zero signal
         x = torch.zeros(1, self.in_channels, N).to(device)
@@ -117,7 +116,7 @@ class MuReNNDirect(torch.nn.Module):
             psi_j = psis[j].real
             psi_j[:, :, psi_j.shape[2]//2] = 1 / math.sqrt(2) ** j # The energy gain
             # Convolve the impulse signal with the conv1d filter
-            Wpsi_j = self.conv1d[j](psi_j).reshape(self.in_channels, self.Q[j], -1)
+            Wpsi_j = self.conv1d[j](psi_j).reshape(1, self.Q[j], -1)
             # Apply dual-tree invert transform to obtain the hybrid wavelets.
             for q in range(self.Q[j]):
                 Wpsi_jq = Wpsi_j[0, q, :].reshape(1,1,-1)

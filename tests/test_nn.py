@@ -28,7 +28,7 @@ def test_direct_shape(J, Q, T, N, padding_mode):
         padding_mode=padding_mode,
     )
     y = graph(x)
-    assert y.shape[:3] == (B, C, Q*J)
+    assert y.shape[:2] == (B, Q*J)
     
 
 def test_direct_diff():
