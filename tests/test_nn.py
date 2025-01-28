@@ -30,7 +30,11 @@ def test_direct_shape(J, Q, T, N, padding_mode, include_lp):
         include_lp=include_lp,
     )
     y = graph(x)
-    assert y.shape[:2] == (B, Q*J)
+    
+    if graph.include_lp == False:
+        assert y.shape[:2] == (B, Q * J)
+    else:
+        assert y.shape[:2] == (B, Q * J + C)
     
 
 def test_direct_diff():

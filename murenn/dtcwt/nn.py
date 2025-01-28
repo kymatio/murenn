@@ -81,6 +81,9 @@ class MuReNNDirect(torch.nn.Module):
             UWx_j = self.down[j](UWx_j)
             UWx.append(UWx_j)
 
+        if self.include_lp:
+            UWx.append(self.down[-1](lp))
+
         UWx = torch.cat(UWx, dim=1)
         return UWx
     
