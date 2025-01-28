@@ -30,11 +30,9 @@ def test_direct_shape(J, Q, T, N, padding_mode, include_lp):
         include_lp=include_lp,
     )
     y = graph(x)
-    
-    if graph.include_lp == False:
-        assert y.shape[:2] == (B, Q * J)
-    else:
-        assert y.shape[:2] == (B, Q * J + C)
+
+
+    assert y.shape[:2] == (B, Q * J + C * include_lp)
     
 
 def test_direct_diff():
@@ -71,6 +69,8 @@ def test_multi_layers(Q, T, N, include_lp):
             include_lp=include_lp,
         )
         x = layer_i(x)
+        C = Q * J + C * include_lp
+        assert x.shape[1] == C
 
 
 def test_modulus():
