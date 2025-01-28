@@ -13,6 +13,7 @@ class MuReNNDirect(torch.nn.Module):
         T (int): The Conv1d kernel size.
         in_channels (int): Number of channels in the input signal.
         J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J-1.
+        include_lp (bool): Whether include the low-pass component in the output. Default is False.
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
     """
