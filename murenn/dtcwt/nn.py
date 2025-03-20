@@ -149,7 +149,7 @@ class MuReNNDirect(torch.nn.Module):
             return conv1d
 
         return {
-            "complex": create_conv1d(ws_r+1j*ws_i),
+            "complex": create_conv1d(ws_r+ws_i),
             "real": create_conv1d(ws_r),
             "imag": create_conv1d(ws_i),
         }
@@ -210,3 +210,4 @@ class Downsampling(torch.nn.Module):
         # of the modulus, is non-negative
         x = self.relu(x)
         return x
+        
