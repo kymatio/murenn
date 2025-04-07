@@ -139,7 +139,10 @@ class DTCWTDirect(DTCWT):
         x_phi, x_psi_r, x_psi_i = FWD_J1.apply(
             x, self.h0o, self.h1o, self.skip_hps[0], self.padding_mode
         )
-        x_psis.append(x_psi_r + 1j * x_psi_i)
+        if not self.skip_hps[0]:
+            x_psis.append(x_psi_r + 1j * x_psi_i)
+        else:
+            x_psis.append(None)
         if self.include_scale[0]:
             x_phis.append(x_phi)
         else:
@@ -168,17 +171,20 @@ class DTCWTDirect(DTCWT):
                 self.skip_hps[j],
                 self.padding_mode,
             )
-            if (j % 2 == 1) and self.alternate_gh:
-                # The result is anti-analytic in the Hilbert sense.
-                # We conjugate the result to bring the spectrum back to (0, pi).
-                # This is purely by convention and for consistency through j.
-                x_psi_i = -1 * x_psi_i
-            x_psis.append(x_psi_r + 1j * x_psi_i)
+            if not self.skip_hps[j]:
+                if (j % 2 == 1) and self.alternate_gh:
+                    # The result is anti-analytic in the Hilbert sense.
+                    # We conjugate the result to bring the spectrum back to (0, pi).
+                    # This is purely by convention and for consistency through j.
+                    x_psi_i = -1 * x_psi_i
+                x_psis.append(x_psi_r + 1j * x_psi_i)
+            else:
+                x_psis.append(None)
 
             if self.include_scale[j]:
                 x_phis.append(x_phi)
             else:
-                x_phis.append(x_phi.new_zeros(x_phi.shape))
+                x_phis.append(x_phi.new_zeros([]))
 
         # If at least one of the booleans in the list include_scale is True,
         # return the list x_phis as yl. Otherwise, return the last x_phi.
@@ -338,19 +344,25 @@ class DTCWTInverse(DTCWT):
             # Check the length of the band-pass, low-pass input coefficients
             x_psi = x_psis[j]
 
-            if x_phi.shape[-1] != x_psi.shape[-1] * 2:
-                x_phi = x_phi[:,:,1:-1]
-            assert (
-                x_psi.shape[-1] * 2 == x_phi.shape[-1]
-            ), f"J={j}\n{x_psi.shape[-1]*2}\n{x_phi.shape[-1]}"
+            if not self.skip_hps[j]:
+                if x_phi.shape[-1] != x_psi.shape[-1] * 2:
+                    x_phi = x_phi[:,:,1:-1]
+                    
+                assert (
+                    x_psi.shape[-1] * 2 == x_phi.shape[-1]
+                ), f"J={j}\n{x_psi.shape[-1]*2}\n{x_phi.shape[-1]}"
 
             if (j % 2 == 1) and self.alternate_gh:
-                x_psi = torch.conj(x_psi)
+                if not self.skip_hps[j]:
+                    x_psi = torch.conj(x_psi)
                 g0a, g1a, g0b, g1b = self.h0a, self.h1a, self.h0b, self.h1b
             else:
                 g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b
 
-            x_psi_r, x_psi_i = x_psi.real, x_psi.imag
+            if self.skip_hps[j]:
+                x_psi_r, x_psi_i = None, None
+            else:
+                x_psi_r, x_psi_i = x_psi.real, x_psi.imag
             x_phi = INV_J2PLUS.apply(
                 x_phi,
                 x_psi_r,
@@ -365,10 +377,14 @@ class DTCWTInverse(DTCWT):
                 x_phi = np.sqrt(2) * x_phi
 
         # LEVEL 1 ##
-        if x_phi.shape[-1] != x_psis[0].shape[-1] * 2:
-            x_phi = x_phi[:,:,1:-1]
+        if self.skip_hps[0]:
+            x_psi_r, x_psi_i = None, None
+        else:
+            if x_phi.shape[-1] != x_psis[0].shape[-1] * 2:
+                padding = x_phi.shape[-1] - x_psis[0].shape[-1] * 2
+                x_phi = x_phi[:,:,padding//2:-padding//2]
 
-        x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
+            x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
 
         x_phi = INV_J1.apply(
             x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode

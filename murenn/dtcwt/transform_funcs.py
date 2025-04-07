@@ -42,13 +42,16 @@ class FWD_J1(torch.autograd.Function):
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
-            hi = x.new_zeros(x.shape)
+            hi_r = x.new_zeros([])
+            hi_i = x.new_zeros([])
         else:
             hi = torch.nn.functional.conv1d(
                 pad_(x, h1, padding_mode), h1_rep, groups=ch)
+            hi_r = hi[:,:,::2]
+            hi_i = hi[:,:,1::2]
 
         # Return low-pass (x_phi), real and imaginary part of high-pass (x_psi)
-        return lo, hi[:,:,::2], hi[:,:,1::2]
+        return lo, hi_r, hi_i
     
     @staticmethod
     def backward(ctx, dx_phi, dx_psi_r, dx_psi_i):
@@ -111,8 +114,8 @@ class FWD_J2PLUS(torch.autograd.Function):
 
         # Apply high-pass filtering. If skipped, create an empty array.
         if skip_hps:
-            bp_r = lo.new_zeros((b, ch, T//4))
-            bp_i = lo.new_zeros((b, ch, T//4))
+            bp_r = lo.new_zeros([])
+            bp_i = lo.new_zeros([])
         else:
             bp =  coldfilt(x_phi, h1a_rep, h1b_rep, padding_mode)
             bp_r = bp[:,ch:2*ch]
@@ -169,13 +172,16 @@ class INV_J1(torch.autograd.Function):
         # Apply dual low-pass filtering
         x0 = torch.nn.functional.conv1d(pad_(lo, g0, padding_mode), g0_rep, groups=ch)
 
-        # Apply dual high-pass filtering
-        hi = torch.stack((hi_r, hi_i), dim=-1).view(b, ch, T)
-        x1 = torch.nn.functional.conv1d(pad_(hi, g1, padding_mode), g1_rep, groups=ch)
+        if hi_r is None or hi_i is None:
+            return x0
+        else:
+            # Apply dual high-pass filtering
+            hi = torch.stack((hi_r, hi_i), dim=-1).view(b, ch, T)
+            x1 = torch.nn.functional.conv1d(pad_(hi, g1, padding_mode), g1_rep, groups=ch)
 
-        # Mix low-pass and high-pass contributions
-        x = x0 + x1
-        return x
+            # Mix low-pass and high-pass contributions
+            x = x0 + x1
+            return x
     
     @staticmethod
     def backward(ctx, dx):
@@ -231,8 +237,13 @@ class INV_J2PLUS(torch.autograd.Function):
         ctx.save_for_backward(g0a_rep, g1a_rep, g0b_rep, g1b_rep)
         ctx.mode = mode_to_int(padding_mode)
 
-        bp = torch.stack((bp_i, bp_r), dim=-1).view(b, ch, T)
-        lo = colifilt(lo, g0a_rep, g0b_rep, padding_mode) + colifilt(bp, g1a_rep, g1b_rep, padding_mode)
+        lo = colifilt(lo, g0a_rep, g0b_rep, padding_mode)
+        if bp_r is None or bp_i is None:
+            # If no band-pass output, return the low-pass output
+            return lo
+        else:
+            bp = torch.stack((bp_i, bp_r), dim=-1).view(b, ch, T)
+            lo = lo + colifilt(bp, g1a_rep, g1b_rep, padding_mode)
 
         return lo
 
