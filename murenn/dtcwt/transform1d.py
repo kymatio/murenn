@@ -139,7 +139,8 @@ class DTCWTDirect(DTCWT):
         x_phi, x_psi_r, x_psi_i = FWD_J1.apply(
             x, self.h0o, self.h1o, self.skip_hps[0], self.padding_mode
         )
-        x_psis.append(x_psi_r + 1j * x_psi_i)
+        if not self.skip_hps[0]:
+            x_psis.append(x_psi_r + 1j * x_psi_i)
         if self.include_scale[0]:
             x_phis.append(x_phi)
         else:
@@ -173,7 +174,9 @@ class DTCWTDirect(DTCWT):
                 # We conjugate the result to bring the spectrum back to (0, pi).
                 # This is purely by convention and for consistency through j.
                 x_psi_i = -1 * x_psi_i
-            x_psis.append(x_psi_r + 1j * x_psi_i)
+
+            if not self.skip_hps[j]:
+                x_psis.append(x_psi_r + 1j * x_psi_i)
 
             if self.include_scale[j]:
                 x_phis.append(x_phi)
