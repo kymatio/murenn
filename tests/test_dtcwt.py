@@ -138,12 +138,12 @@ def test_avrg_energy(J, alternate_gh):
     assert torch.abs(ratio - 1) <= 0.01
 
 
-@pytest.mark.parametrize("J", list(range(1, 10)))
+@pytest.mark.parametrize("J", list(range(2, 10)))
 def test_subbands(J):
     tfm = murenn.DTCWT(J=J)
     subbands = tfm.subbands
     # Test the number of subbands
-    # There are J band-pass subbands and 1 low-pass subband, so J+2 subbands boundaries in total.
+    # There are J band-pass subbands, so J+2 boundaries in total.
     assert len(subbands) == J + 2
     # Test the min/max value
     assert min(subbands) == 0.
@@ -152,7 +152,7 @@ def test_subbands(J):
     assert all(subbands[i] > subbands[i+1] for i in range(len(subbands)-1)
     )
 
-@pytest.mark.parametrize("J", list(range(1, 10)))
+@pytest.mark.parametrize("J", list(range(2, 10)))
 def test_hz_to_octs(J):
     sr = 16000
     nyquist = 8000

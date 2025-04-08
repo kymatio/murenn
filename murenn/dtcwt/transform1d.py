@@ -197,7 +197,6 @@ class DTCWTDirect(DTCWT):
 
         N = 2 ** (self.J + 4)
         x = torch.zeros(1, 1, N)
-        x[0, 0, N//2] = 1
 
         idtcwt = DTCWTInverse(
             J = self.J, 
@@ -208,19 +207,20 @@ class DTCWTDirect(DTCWT):
         ys = []
 
         for j in range(self.J):
-            y_phi = x_phi * 0
-            y_psis = [x_psis[k] * (j==k) for k in range(self.J)]
-            y_j_hat = torch.abs(torch.fft.fft(idtcwt(y_phi, y_psis).squeeze()))
-            ys.append(y_j_hat)
+            x_psi = x_psis[j].real
+            x_psi[:, :, x_psi.shape[2]//2] = 1
+            x_psi_r = [x_psi * (1 + 0j) if k==j else x_psis[k] for k in range(self.J)]
+            x_psi_i = [x_psi * (0 + 1j) if k==j else x_psis[k] for k in range(self.J)]
+            x_psi_r = idtcwt(x_phi, x_psi_r)
+            x_psi_i = idtcwt(x_phi, x_psi_i)
+            y_j_hat = torch.abs(torch.fft.fft(torch.complex(x_psi_r, x_psi_i).squeeze()))
+            ys.append(y_j_hat / torch.max(y_j_hat))
 
-        lp_psis = [x_psis[k] * 0 for k in range(self.J)]
-        y_lp_hat = torch.abs(torch.fft.fft(idtcwt(x_phi, lp_psis).squeeze()))
-        ys.append(y_lp_hat)
 
         # Stack tensors to create a 2D tensor where each row is a tensor from the list
-        ys = torch.stack(ys)[:, :N//2]
+        ys = torch.stack(ys)
         # Define the threshold
-        threshold = 0.2
+        threshold = 0.5
         # Apply the threshold
         valid_mask = ys >= threshold
         ys = ys * valid_mask.float()
