@@ -1,5 +1,7 @@
 # MuReNN: Multiresolution Neural Networks
 
+Trivial commit to check that codecov is correctly installed
+
 ```tex
 @inproceedings{lostanlen2023fitting,
   title={Fitting Auditory Filterbanks with Multiresolution Neural Networks},
