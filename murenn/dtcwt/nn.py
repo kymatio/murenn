@@ -26,8 +26,8 @@ class MuReNNDirect(torch.nn.Module):
         else:
             raise TypeError(f"Q must to be int or list, got {type(Q)}")
         if J_phi is None:
-            J_phi = J - 1
-        if J_phi < (J - 1):
+            J_phi = J
+        if J_phi < J:
             raise ValueError("J_phi must be greater or equal to J-1")
         self.T = T
         self.in_channels = in_channels
@@ -52,7 +52,7 @@ class MuReNNDirect(torch.nn.Module):
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
     
-            down_j = Downsampling(J_phi - j)
+            down_j = Downsampling(J_phi - j - 1)
             down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
@@ -74,10 +74,15 @@ class MuReNNDirect(torch.nn.Module):
         UWx = []
         
         # The first level
-        x0 = torch.view_as_real(bps[0])
-        x0 = x0.reshape(x0.shape[0], x0.shape[1], -1)
-        Wx0 = self.conv1d[0](x0)
-        Wx0 = ModulusStable.apply(Wx0, torch.zeros_like(Wx0))
+        if self.stride == 1:
+            x0 = torch.view_as_real(bps[0])
+            x0 = x0.reshape(x0.shape[0], x0.shape[1], -1)
+            Wx0 = self.conv1d[0](x0)
+            Wx0 = ModulusStable.apply(Wx0, torch.zeros_like(Wx0))
+        else:
+            Wx0r = self.conv1d[0](bps[0].real)
+            Wx0i = self.conv1d[0](bps[0].imag)
+            Wx0 = ModulusStable.apply(Wx0r, Wx0i)
         Wx0 = self.down[0](Wx0)
         UWx.append(Wx0)
 
