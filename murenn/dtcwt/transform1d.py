@@ -19,6 +19,7 @@ class DTCWT(torch.nn.Module):
         alternate_gh=False,
         padding_mode="symmetric",
         normalize=True,
+        stride=2,
     ):
         super().__init__()
         self.level1 = level1
@@ -26,6 +27,7 @@ class DTCWT(torch.nn.Module):
         self.J = J
         self.alternate_gh = alternate_gh
         self.normalize = normalize
+        self.stride = stride
 
         # Parse the "skip_hps" argument for skipping finest scales.
         if isinstance(skip_hps, (list, tuple, np.ndarray)):
@@ -105,7 +107,9 @@ class DTCWTDirect(DTCWT):
         padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the filters.
         normalize (bool): If True (default), the output will be normalized by a
-            factor of 1/sqrt(2)
+            factor of 1/sqrt(2).
+        stride (int): 1 or 2. Stride for the high-pass filters in the second level
+            and above.
     """
 
     def forward(self, x):
@@ -159,15 +163,18 @@ class DTCWTDirect(DTCWT):
                 x_phi = torch.cat((x_phi[:,:,0:1], x_phi, x_phi[:,:,-1:]), dim=-1)
             if self.normalize:
                 x_phi = 1/np.sqrt(2) * x_phi
-            x_phi, x_psi_r, x_psi_i = FWD_J2PLUS.apply(
-                x_phi,
+                
+            fwd_j2plus = FWD_J2PLUS(
                 h0a,
                 h1a,
                 h0b,
                 h1b,
                 self.skip_hps[j],
                 self.padding_mode,
+                self.stride,
             )
+
+            x_phi, x_psi_r, x_psi_i = fwd_j2plus(x_phi)
             if (j % 2 == 1) and self.alternate_gh:
                 # The result is anti-analytic in the Hilbert sense.
                 # We conjugate the result to bring the spectrum back to (0, pi).
@@ -293,6 +300,7 @@ class DTCWTInverse(DTCWT):
         padding_mode="symmetric",
         normalize=True,
         length=None,
+        stride=2,
     ):
         if padding_mode != "symmetric":
             raise NotImplementedError(
@@ -307,6 +315,7 @@ class DTCWTInverse(DTCWT):
             alternate_gh=alternate_gh,
             padding_mode=padding_mode,
             normalize=normalize,
+            stride=stride,
         )
         self.length = length
 
@@ -337,6 +346,8 @@ class DTCWTInverse(DTCWT):
             # The band-pass coefficients at level j
             # Check the length of the band-pass, low-pass input coefficients
             x_psi = x_psis[j]
+            if self.stride == 1:
+                x_psi = x_psi[:, :, ::2]
 
             if x_phi.shape[-1] != x_psi.shape[-1] * 2:
                 x_phi = x_phi[:,:,1:-1]

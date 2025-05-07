@@ -12,7 +12,7 @@ def prep_filt(h):
     # channel index (for multimodal time series).
     return torch.tensor(h[None, None, :, 0], dtype=torch.get_default_dtype())
 
-def coldfilt(x, ha, hb, padding_mode):
+def coldfilt(x, ha, hb, padding_mode, stride=2):
     b, ch, T = x.shape
     assert T % 4 == 0
     x = pad_(x, ha, padding_mode, False)
@@ -20,8 +20,9 @@ def coldfilt(x, ha, hb, padding_mode):
     # that the length of 'lo' will be the length of 'x_phi' divided by 2.
     x = torch.cat((x[:,:,2::2], x[:,:,3::2]), dim=1)
     h = torch.cat((ha, hb), dim=0)
-    x = torch.nn.functional.conv1d(x, h, stride=2, groups=ch*2)
+    x = torch.nn.functional.conv1d(x, h, stride=stride, groups=ch*2)
     return x
+
 
 def colifilt(x, ha, hb, padding_mode):
     m = ha.shape[-1]
@@ -44,11 +45,9 @@ def colifilt(x, ha, hb, padding_mode):
         h1 = hao
         h2 = hbo
         h3 = hae
-        h4 = hbe
+        h4 = hbe    
         x = torch.cat((x[:,:,1:-1:2], x[:,:,2:-1:2], x[:,:,1:-1:2], x[:,:,2:-1:2]), dim=1)
     h = torch.cat((h1, h2, h3, h4), dim=0)
-
     x = torch.nn.functional.conv1d(x, h, groups=4*ch)
     x = torch.stack([x[:,:ch], x[:,ch:2*ch], x[:,2*ch:3*ch], x[:,3*ch:]], dim=3).view(batch, ch, T*2)
-
     return x

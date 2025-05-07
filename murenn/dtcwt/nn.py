@@ -16,7 +16,7 @@ class MuReNNDirect(torch.nn.Module):
         padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the DTCWT decomposition.
     """
-    def __init__(self, *, J, Q, T, in_channels, J_phi=None, padding_mode="symmetric"):
+    def __init__(self, *, J, Q, T, in_channels, J_phi=None, padding_mode="symmetric", stride=2):
         super().__init__()
         if isinstance(Q, int):
             self.Q = [Q for j in range(J)]
@@ -37,7 +37,9 @@ class MuReNNDirect(torch.nn.Module):
         self.dtcwt = murenn.DTCWT(
             J=J,
             padding_mode=padding_mode,
+            stride=stride,
         )
+        self.stride = stride
 
         for j in range(J):
             conv1d_j = torch.nn.Conv1d(
@@ -70,7 +72,16 @@ class MuReNNDirect(torch.nn.Module):
         lp, bps = self.dtcwt(x)
 
         UWx = []
-        for j in range(self.dtcwt.J):
+        
+        # The first level
+        x0 = torch.view_as_real(bps[0])
+        x0 = x0.reshape(x0.shape[0], x0.shape[1], -1)
+        Wx0 = self.conv1d[0](x0)
+        Wx0 = ModulusStable.apply(Wx0, torch.zeros_like(Wx0))
+        Wx0 = self.down[0](Wx0)
+        UWx.append(Wx0)
+
+        for j in range(1, self.dtcwt.J):
             Wx_j_r = self.conv1d[j](bps[j].real)
             Wx_j_i = self.conv1d[j](bps[j].imag)
             UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
@@ -104,7 +115,7 @@ class MuReNNDirect(torch.nn.Module):
         x = torch.zeros(1, self.in_channels, N).to(device)
 
         # Initialize the inverse DTCWT
-        inv = murenn.IDTCWT(J=J, alternate_gh=False).to(device)
+        inv = murenn.IDTCWT(J=J, alternate_gh=False, stride=self.stride).to(device)
 
         # Obtain two dual-tree response of the zero signal
         phi, psis = self.dtcwt(x)

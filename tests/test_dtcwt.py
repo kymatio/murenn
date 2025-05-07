@@ -40,7 +40,8 @@ def test_fwd_same(J):
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("J", list(range(1, 5)))
 @pytest.mark.parametrize("T", [44099, 44100])
-def test_pr(level1, qshift, J, T, alternate_gh, normalize):
+@pytest.mark.parametrize("stride", [1, 2])
+def test_pr(level1, qshift, J, T, alternate_gh, normalize, stride):
     Xt = torch.randn(2, 2, T)
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
@@ -50,6 +51,7 @@ def test_pr(level1, qshift, J, T, alternate_gh, normalize):
         include_scale=False,
         padding_mode="symmetric",
         normalize=normalize,
+        stride=stride,
     )
     lp, bp = xfm_murenn(Xt)
     inv = murenn.DTCWTInverse(
@@ -61,6 +63,7 @@ def test_pr(level1, qshift, J, T, alternate_gh, normalize):
         padding_mode="symmetric",
         normalize=normalize,
         length=T,
+        stride=stride,
     )
     X_rec = inv(lp, bp)
     torch.testing.assert_close(Xt, X_rec)

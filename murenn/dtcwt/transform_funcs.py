@@ -3,7 +3,6 @@ import torch
 from murenn.dtcwt.utils import pad_, mode_to_int, int_to_mode
 from murenn.dtcwt.lowlevel import coldfilt, colifilt
 
-
 class FWD_J1(torch.autograd.Function):
     """Differentiable function doing forward DTCWT at level 1.
     Returns low-pass (-pi/4 to pi/4) and high-pass (pi/4 to 3pi/4) as a pair.
@@ -53,6 +52,7 @@ class FWD_J1(torch.autograd.Function):
     @staticmethod
     def backward(ctx, dx_phi, dx_psi_r, dx_psi_i):
         h0, h1 = ctx.saved_tensors
+
         skip_hps = ctx.skip_hps
         mode = int_to_mode(ctx.mode)
         b, ch, T = dx_phi.shape
@@ -66,7 +66,8 @@ class FWD_J1(torch.autograd.Function):
         return dx, None, None, None, None
 
 
-class FWD_J2PLUS(torch.autograd.Function):
+# class FWD_J2PLUS(torch.autograd.Function):
+class FWD_J2PLUS(torch.nn.Module):
     """
     Differentiable function doing forward DTCWT at scales j>1.
 
@@ -74,8 +75,19 @@ class FWD_J2PLUS(torch.autograd.Function):
     tree a whereas the imaginary part of bp corresponds to the
     high-pass output of tree b."""
 
-    @staticmethod
-    def forward(ctx, x_phi, h0a, h1a, h0b, h1b, skip_hps, padding_mode):
+    def __init__(self, h0a, h1a, h0b, h1b, skip_hps, padding_mode, stride):
+        super(FWD_J2PLUS, self).__init__()
+        self.h0a = h0a
+        self.h1a = h1a
+        self.h0b = h0b
+        self.h1b = h1b
+        self.skip_hps = skip_hps
+        self.padding_mode = padding_mode
+        self.stride = stride
+
+    # @staticmethod
+    # def forward(ctx, x_phi, h0a, h1a, h0b, h1b, skip_hps, padding_mode, stride):
+    def forward(self, x_phi):
         """
         Forward dual-tree complex wavelet transform at levels 2 and coarser.
 
@@ -88,6 +100,7 @@ class FWD_J2PLUS(torch.autograd.Function):
             h1b: high-pass filter of tree b (imaginary part)
             skip_hps: if True, skip high-pass filtering
             padding_mode: 'constant'(zero padding), 'symmetric', 'replicate' or 'circular'
+            stride: stride used for the high-pass filters
 
         Returns:
             lo: low-pass output from both trees
@@ -96,25 +109,26 @@ class FWD_J2PLUS(torch.autograd.Function):
 
         # Replicate filters along the channel dimension
         b, ch, T = x_phi.shape
-        h0a_rep = h0a.repeat(ch, 1, 1)
-        h1a_rep = h1a.repeat(ch, 1, 1)
-        h0b_rep = h0b.repeat(ch, 1, 1)
-        h1b_rep = h1b.repeat(ch, 1, 1)
-        ctx.save_for_backward(h0a_rep, h1a_rep, h0b_rep, h1b_rep)
-        ctx.skip_hps = skip_hps
-        ctx.mode = mode_to_int(padding_mode)
+        h0a_rep = self.h0a.repeat(ch, 1, 1)
+        h1a_rep = self.h1a.repeat(ch, 1, 1)
+        h0b_rep = self.h0b.repeat(ch, 1, 1)
+        h1b_rep = self.h1b.repeat(ch, 1, 1)
+        # ctx.save_for_backward(h0a_rep, h1a_rep, h0b_rep, h1b_rep)
+        # ctx.skip_hps = skip_hps
+        # ctx.mode = mode_to_int(padding_mode)
+        # ctx.stride = stride
 
         # Apply low-pass filtering on trees a (real) and b (imaginary).
-        lo = coldfilt(x_phi, h0a_rep, h0b_rep, padding_mode)
+        lo = coldfilt(x_phi, h0a_rep, h0b_rep, self.padding_mode)
         # 'lo' the low-pass output such that lo[2t]=lo_a[t] and lo[2t+1]=lo_b[t]
         lo = torch.stack([lo[:,:ch], lo[:,ch:2*ch]], dim=-1).view(b, ch, T//2)
 
         # Apply high-pass filtering. If skipped, create an empty array.
-        if skip_hps:
-            bp_r = lo.new_zeros((b, ch, T//4))
-            bp_i = lo.new_zeros((b, ch, T//4))
+        if self.skip_hps:
+            bp_r = lo.new_zeros((b, ch, T//(2*self.stride)))
+            bp_i = lo.new_zeros((b, ch, T//(2*self.stride)))
         else:
-            bp =  coldfilt(x_phi, h1a_rep, h1b_rep, padding_mode)
+            bp =  coldfilt(x_phi, h1a_rep, h1b_rep, self.padding_mode, stride=self.stride)
             bp_r = bp[:,ch:2*ch]
             bp_i = bp[:,:ch]
 
@@ -122,20 +136,22 @@ class FWD_J2PLUS(torch.autograd.Function):
         # real part for tree a and imaginary part for tree b.
         return lo, bp_r, bp_i
 
-    @staticmethod
-    def backward(ctx, dx_phi, dx_psi_r, dx_psi_i):
-        g0b, g1b, g0a, g1a = ctx.saved_tensors
-        skip_hps = ctx.skip_hps
-        padding_mode = int_to_mode(ctx.mode)
-        b, ch, T = dx_phi.shape
-        if not ctx.needs_input_grad[0]:
-            dx = None
-        else:
-            dx = colifilt(dx_phi, g0a, g0b, padding_mode)
-            if not skip_hps:
-                dx_psi = torch.stack((dx_psi_i, dx_psi_r), dim=-1).view(b, ch, T)
-                dx += colifilt(dx_psi, g1a, g1b, padding_mode)
-        return dx, None, None, None, None, None, None, None
+    # @staticmethod
+    # def backward(ctx, dx_phi, dx_psi_r, dx_psi_i):
+    #     g0b, g1b, g0a, g1a = ctx.saved_tensors
+    #     skip_hps = ctx.skip_hps
+    #     padding_mode = int_to_mode(ctx.mode)
+    #     stride = ctx.stride
+    #     if not ctx.needs_input_grad[0]:
+    #         dx = None
+    #     else:
+    #         dx = colifilt(dx_phi, g0a, g0b, padding_mode)
+    #         if not skip_hps:
+    #             b, ch, T = dx_psi_r.shape
+    #             dx_psi = torch.stack((dx_psi_i, dx_psi_r), dim=-1).view(b, ch, 2*T)
+    #             dx += colifilt(dx_psi, g1a, g1b, padding_mode)
+                    
+    #     return dx, None, None, None, None, None, None, None, None
 
 
 class INV_J1(torch.autograd.Function):
@@ -199,6 +215,7 @@ class INV_J1(torch.autograd.Function):
 
 
 class INV_J2PLUS(torch.autograd.Function):
+# class INV_J2PLUS(torch.nn.Module):
     """Differentiable function doing inverse DTCWT at levels >1.
     Returns a broadband 1-D signal from a low-pass and a high-pass component.
     """
@@ -230,7 +247,6 @@ class INV_J2PLUS(torch.autograd.Function):
         g1b_rep = g1b.repeat(ch, 1, 1)
         ctx.save_for_backward(g0a_rep, g1a_rep, g0b_rep, g1b_rep)
         ctx.mode = mode_to_int(padding_mode)
-
         bp = torch.stack((bp_i, bp_r), dim=-1).view(b, ch, T)
         lo = colifilt(lo, g0a_rep, g0b_rep, padding_mode) + colifilt(bp, g1a_rep, g1b_rep, padding_mode)
 
@@ -252,4 +268,4 @@ class INV_J2PLUS(torch.autograd.Function):
                     dbp_r = dbp[:,ch:2*ch]
                 if ctx.needs_input_grad[2]:
                     dbp_i = dbp[:,:ch]
-        return dlo, dbp_r, dbp_i, None, None, None, None, None, None
+        return dlo, dbp_r, dbp_i, None, None, None, None, None, None, None
