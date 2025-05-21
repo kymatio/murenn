@@ -52,7 +52,10 @@ class MuReNNDirect(torch.nn.Module):
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
     
-            down_j = Downsampling(J_phi - j - 1)
+            if j <= 1:
+                down_j = Downsampling(J_phi)
+            else:
+                down_j = Downsampling(J_phi - j + 1)
             down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
@@ -72,26 +75,14 @@ class MuReNNDirect(torch.nn.Module):
         lp, bps = self.dtcwt(x)
 
         UWx = []
-        
-        # The first level
-        if self.stride == 1:
-            x0 = torch.view_as_real(bps[0])
-            x0 = x0.reshape(x0.shape[0], x0.shape[1], -1)
-            Wx0 = self.conv1d[0](x0)
-            Wx0 = ModulusStable.apply(Wx0, torch.zeros_like(Wx0))
-        else:
-            Wx0r = self.conv1d[0](bps[0].real)
-            Wx0i = self.conv1d[0](bps[0].imag)
-            Wx0 = ModulusStable.apply(Wx0r, Wx0i)
-        Wx0 = self.down[0](Wx0)
-        UWx.append(Wx0)
 
-        for j in range(1, self.dtcwt.J):
-            Wx_j_r = self.conv1d[j](bps[j].real)
-            Wx_j_i = self.conv1d[j](bps[j].imag)
-            UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
-            UWx_j = self.down[j](UWx_j)
-            UWx.append(UWx_j)
+        for j in range(self.dtcwt.J):
+            xj = torch.view_as_real(bps[j])
+            xj = xj.reshape(xj.shape[0], xj.shape[1], -1)
+            Wxj = self.conv1d[j](xj)
+            Wxj = ModulusStable.apply(Wxj, torch.zeros_like(Wxj))
+            Wxj = self.down[j](Wxj)
+            UWx.append(Wxj)
 
         UWx = torch.cat(UWx, dim=1)
         return UWx
