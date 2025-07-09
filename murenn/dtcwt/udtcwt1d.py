@@ -11,17 +11,15 @@ class FWD_J1(torch.nn.Module):
     """Differentiable function doing forward UDT-CWT at level 1.
     Returns low-pass (-pi/4 to pi/4) and high-pass (pi/4 to 3pi/4) as a pair.
     """
-    def __init__(self, h0, h1, skip_hps, padding_mode):
+    def __init__(self, skip_hps, padding_mode):
         super().__init__()
-        self.h0 = h0
-        self.h1 = h1
         self.skip_hps = skip_hps
         self.padding_mode = padding_mode
 
-    def forward(self, x):
+    def forward(self, x, h0, h1):
         b, ch, T = x.shape
-        h0_rep = self.h0.repeat(ch*2, 1, 1)
-        h1_rep = self.h1.repeat(ch*2, 1, 1)
+        h0_rep = h0.repeat(ch*2, 1, 1)
+        h1_rep = h1.repeat(ch*2, 1, 1)
         # Pad the input signal
         padding_total_lo = h0_rep.shape[-1] - 1
         x_lo = torch.nn.functional.pad(x, (padding_total_lo // 2, padding_total_lo - padding_total_lo // 2), self.padding_mode)
@@ -51,19 +49,19 @@ class FWD_J2PLUS(torch.nn.Module):
     """Differentiable function doing forward UDT-CWT at level 2+.
     Returns low-pass (-pi/4 to pi/4) and high-pass (pi/4 to 3pi/4) as a pair.
     """
-    def __init__(self, h0a, h1a, h0b, h1b, dilation, skip_hps, padding_mode):
+    def __init__(self, dilation, skip_hps, padding_mode):
         super().__init__()
-        self.h0a = h0a
-        self.h1a = h1a
-        self.h0b = h0b
-        self.h1b = h1b
+        # self.h0a = h0a
+        # self.h1a = h1a
+        # self.h0b = h0b
+        # self.h1b = h1b
         self.skip_hps = skip_hps
         self.padding_mode = padding_mode
         self.dilation = dilation
 
-    def forward(self, x):
+    def forward(self, x, h0a, h1a, h0b, h1b, ):
         b, ch, T = x.shape
-        h0 = torch.cat((self.h0a, self.h0b), dim=0)
+        h0 = torch.cat((h0a, h0b), dim=0)
         h0_rep = h0.repeat(ch//2, 1, 1)
 
         # Pad the input signal
@@ -78,7 +76,7 @@ class FWD_J2PLUS(torch.nn.Module):
         if self.skip_hps:
             hi = x.new_zeros(x.shape)
         else:
-            h1 = torch.cat((self.h1a, self.h1b), dim=0)
+            h1 = torch.cat((h1a, h1b), dim=0)
             h1_rep = h1.repeat(ch//2, 1, 1)
             hi = torch.nn.functional.conv1d(
             x, h1_rep, dilation=self.dilation, groups=ch)
@@ -141,10 +139,10 @@ class UDTCWTDirect(torch.nn.Module):
         self.register_buffer("h1b", prep_filt(h1b))
         self.register_buffer("g1a", prep_filt(g1a))
         self.register_buffer("g1b", prep_filt(g1b))
-        self.fwd_j1 = FWD_J1(self.h0o, self.h1o, self.skip_hps[0], self.padding_mode)
+        self.fwd_j1 = FWD_J1(self.skip_hps[0], self.padding_mode)
         self.fwd_j2plus = torch.nn.ModuleList([
             FWD_J2PLUS(
-                self.h0a, self.h1a, self.h0b, self.h1b, 2 ** j, self.skip_hps[j], self.padding_mode
+                2 ** j, self.skip_hps[j], self.padding_mode
             ) for j in range(1, J)
         ])
 
@@ -159,7 +157,7 @@ class UDTCWTDirect(torch.nn.Module):
             x = torch.cat((x, x[:,:,-1:]), dim=-1)
 
         ## LEVEL 1 ##
-        x_phi, x_psi = self.fwd_j1(x)
+        x_phi, x_psi = self.fwd_j1(x, self.h0o, self.h1o)
         # x_psis.append(x_psi)
         x_psis.append(x_psi[:, C:2*C, :] + 1j * x_psi[:, :C, :])
         if self.include_scale[0]:
@@ -174,7 +172,7 @@ class UDTCWTDirect(torch.nn.Module):
             # Ensure the lowpass is divisible by 4
             if x_phi.shape[-1] % 4 != 0:
                 x_phi = torch.cat((x_phi[:,:,0:1], x_phi, x_phi[:,:,-1:]), dim=-1)
-            x_phi, x_psi = self.fwd_j2plus[j](x_phi)
+            x_phi, x_psi = self.fwd_j2plus[j](x_phi,self.h0a, self.h1a, self.h0b, self.h1b)
             x_psis.append(x_psi[:, :C, :] + 1j * x_psi[:, C:2*C, :])
 
             if self.include_scale[j]:
