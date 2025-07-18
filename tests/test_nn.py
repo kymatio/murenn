@@ -4,7 +4,7 @@ import torch
 import murenn
 import math
 
-from murenn.dtcwt.nn import ModulusStable, Downsampling
+from murenn.dtcwt.nn_antialiasing import ModulusStable, Downsampling
 
 
 if torch.cuda.is_available():
