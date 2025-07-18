@@ -43,10 +43,11 @@ class MuReNNDirect(torch.nn.Module):
         for j in range(J):
             conv1d_j = torch.nn.Conv1d(
                 in_channels=in_channels,
-                out_channels=self.Q[j],
+                out_channels=self.Q[j]*in_channels,
                 kernel_size=self.T,
                 bias=False,
                 padding="same",
+                groups=in_channels,
             )
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
