@@ -26,8 +26,8 @@ class MuReNNDirect(torch.nn.Module):
         else:
             raise TypeError(f"Q must to be int or list, got {type(Q)}")
         if J_phi is None:
-            J_phi = J
-        if J_phi < J:
+            J_phi = J - 1
+        if J_phi < (J - 1):
             raise ValueError("J_phi must be greater or equal to J-1")
         self.T = T
         self.in_channels = in_channels
@@ -37,7 +37,6 @@ class MuReNNDirect(torch.nn.Module):
         self.dtcwt = murenn.DTCWT(
             J=J,
             padding_mode=padding_mode,
-            stride=1,
         )
 
         for j in range(J):
@@ -51,10 +50,7 @@ class MuReNNDirect(torch.nn.Module):
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
     
-            if j <= 1:
-                down_j = Downsampling(J_phi)
-            else:
-                down_j = Downsampling(J_phi - j + 1)
+            down_j = Downsampling(J_phi - j)
             down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
@@ -74,14 +70,12 @@ class MuReNNDirect(torch.nn.Module):
         lp, bps = self.dtcwt(x)
 
         UWx = []
-
         for j in range(self.dtcwt.J):
-            xj = torch.view_as_real(bps[j])
-            xj = xj.reshape(xj.shape[0], xj.shape[1], -1)
-            Wxj = self.conv1d[j](xj)
-            Wxj = ModulusStable.apply(Wxj, torch.zeros_like(Wxj))
-            Wxj = self.down[j](Wxj)
-            UWx.append(Wxj)
+            Wx_j_r = self.conv1d[j](bps[j].real)
+            Wx_j_i = self.conv1d[j](bps[j].imag)
+            UWx_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
+            UWx_j = self.down[j](UWx_j)
+            UWx.append(UWx_j)
 
         UWx = torch.cat(UWx, dim=1)
         return UWx
@@ -110,7 +104,7 @@ class MuReNNDirect(torch.nn.Module):
         x = torch.zeros(1, self.in_channels, N).to(device)
 
         # Initialize the inverse DTCWT
-        inv = murenn.IDTCWT(J=J, alternate_gh=False, stride=1).to(device)
+        inv = murenn.IDTCWT(J=J, alternate_gh=False).to(device)
 
         # Obtain two dual-tree response of the zero signal
         phi, psis = self.dtcwt(x)
