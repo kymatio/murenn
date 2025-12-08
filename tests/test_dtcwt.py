@@ -163,3 +163,11 @@ def test_hz_to_octs(J):
     assert dtcwt.hz_to_octs([nyquist+1e-5], sr) == [-1]
     # Test with a frequency just below the Nyquist frequency, expecting it to map to the lowest subband index
     assert dtcwt.hz_to_octs([nyquist-1e-5], sr) == [0]
+
+def test_default_args():
+    Xt = torch.randn(2, 2, 16000)
+    xfm_murenn = murenn.DTCWTDirect()
+    lp, bp = xfm_murenn(Xt)
+    inv = murenn.DTCWTInverse()
+    X_rec = inv(lp, bp)
+    torch.testing.assert_close(Xt, X_rec)

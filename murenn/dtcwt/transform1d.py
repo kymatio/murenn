@@ -289,7 +289,7 @@ class DTCWTInverse(DTCWT):
         J=8,
         skip_hps=False,
         include_scale=False,
-        alternate_gh=True,
+        alternate_gh=False,
         padding_mode="symmetric",
         normalize=True,
         length=None,
@@ -345,7 +345,7 @@ class DTCWTInverse(DTCWT):
             ), f"J={j}\n{x_psi.shape[-1]*2}\n{x_phi.shape[-1]}"
 
             if (j % 2 == 1) and self.alternate_gh:
-                x_psi = torch.conj(x_psi)
+                x_psi.imag = -1 * x_psi.imag
                 g0a, g1a, g0b, g1b = self.h0a, self.h1a, self.h0b, self.h1b
             else:
                 g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b
