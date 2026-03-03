@@ -16,7 +16,6 @@ class DTCWT(torch.nn.Module):
         J=8,
         skip_hps=False,
         include_scale=False,
-        padding_mode="symmetric",
         normalize=True,
     ):
         super().__init__()
@@ -41,11 +40,6 @@ class DTCWT(torch.nn.Module):
             self.include_scale = [
                 include_scale,
             ] * self.J
-
-        if padding_mode == "zeros":
-            self.padding_mode = "constant"
-        else:
-            self.padding_mode = padding_mode
 
         # Load first-level biorthogonal wavelet filters from disk.
         # h0o is the low-pass filter.
@@ -97,8 +91,6 @@ class DTCWTDirect(DTCWT):
             [False, True, True], the forward call will return the second and
             third lowpass outputs, but discard the lowpass from the first level
             transform.
-        padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate',
-            and 'circular'. Padding scheme for the filters.
         normalize (bool): If True (default), the output will be normalized by a
             factor of 1/sqrt(2)
     """
@@ -132,7 +124,7 @@ class DTCWTDirect(DTCWT):
 
         ## LEVEL 1 ##
         x_phi, x_psi_r, x_psi_i = FWD_J1.apply(
-            x, self.h0o, self.h1o, self.skip_hps[0], self.padding_mode
+            x, self.h0o, self.h1o, self.skip_hps[0]
         )
         x_psis.append(x_psi_r + 1j * x_psi_i)
         if self.include_scale[0]:
@@ -157,7 +149,6 @@ class DTCWTDirect(DTCWT):
                 h0b,
                 h1b,
                 self.skip_hps[j],
-                self.padding_mode,
             )
             x_psis.append(x_psi_r + 1j * x_psi_i)
 
@@ -243,7 +234,6 @@ class DTCWTDirect(DTCWT):
 class DTCWTInverse(DTCWT):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
     should be initialized in the same manner as DTCWTDirect.
-    The only supported padding mode is 'symmetric'.
 
     Args: should be the same as DTCWTDirect.
         level1 (str): One of 'antonini', 'legall', 'near_sym_a', 'near_sym_b'.
@@ -271,21 +261,15 @@ class DTCWTInverse(DTCWT):
         J=8,
         skip_hps=False,
         include_scale=False,
-        padding_mode="symmetric",
         normalize=True,
         length=None,
     ):
-        if padding_mode != "symmetric":
-            raise NotImplementedError(
-                'Only padding_mode="symmetric" is supported. Got: {padding_mode}'
-            )
         super().__init__(
             level1=level1,
             qshift=qshift,
             J=J,
             skip_hps=skip_hps,
             include_scale=include_scale,
-            padding_mode=padding_mode,
             normalize=normalize,
         )
         self.length = length
@@ -335,7 +319,6 @@ class DTCWTInverse(DTCWT):
                 g1a,
                 g0b,
                 g1b,
-                self.padding_mode,
             )
             if self.normalize:
                 x_phi = np.sqrt(2) * x_phi
@@ -347,7 +330,7 @@ class DTCWTInverse(DTCWT):
         x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
 
         x_phi = INV_J1.apply(
-            x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode
+            x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o,
         )
         if self.length:
             x_phi = fix_length(x_phi, size=self.length)

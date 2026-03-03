@@ -14,7 +14,6 @@ def test_fwd_same(J):
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
         include_scale=False,
-        padding_mode="symmetric",
         normalize=False,
     )
     phis, psis = xfm_murenn(Xt)
@@ -45,7 +44,6 @@ def test_pr(level1, qshift, J, T, normalize):
         level1=level1,
         qshift=qshift,
         include_scale=False,
-        padding_mode="symmetric",
         normalize=normalize,
     )
     lp, bp = xfm_murenn(Xt)
@@ -54,7 +52,6 @@ def test_pr(level1, qshift, J, T, normalize):
         level1=level1,
         qshift=qshift,
         include_scale=False,
-        padding_mode="symmetric",
         normalize=normalize,
         length=T,
     )

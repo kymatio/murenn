@@ -15,9 +15,8 @@ else:
 @pytest.mark.parametrize("J", list(range(2, 4)))
 @pytest.mark.parametrize("Q", [3, 4])
 @pytest.mark.parametrize("T", [8, 16])
-@pytest.mark.parametrize("padding_mode", ["symmetric", "zeros"])
 @pytest.mark.parametrize("N", list(range(10)))
-def test_direct_shape(J, Q, T, N, padding_mode):
+def test_direct_shape(J, Q, T, N):
     B, C, L = 2, 3, 2**J+N
     x = torch.zeros(B, C, L)
     graph = murenn.MuReNNDirect(
@@ -25,7 +24,6 @@ def test_direct_shape(J, Q, T, N, padding_mode):
         Q=Q,
         T=T,
         in_channels=C,
-        padding_mode=padding_mode,
     )
     y = graph(x)
     assert y.shape[:2] == (B, Q*J)

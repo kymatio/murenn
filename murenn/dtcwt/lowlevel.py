@@ -12,10 +12,10 @@ def prep_filt(h):
     # channel index (for multimodal time series).
     return torch.tensor(h[None, None, :, 0], dtype=torch.get_default_dtype())
 
-def coldfilt(x, ha, hb, padding_mode):
+def coldfilt(x, ha, hb):
     b, ch, T = x.shape
     assert T % 4 == 0
-    x = pad_(x, ha, padding_mode, False)
+    x = pad_(x, ha, False)
     # Input tensor for tree a and tree b. The first two samples are removed so
     # that the length of 'lo' will be the length of 'x_phi' divided by 2.
     x = torch.cat((x[:,:,2::2], x[:,:,3::2]), dim=1)
@@ -23,7 +23,7 @@ def coldfilt(x, ha, hb, padding_mode):
     x = torch.nn.functional.conv1d(x, h, stride=2, groups=ch*2)
     return x
 
-def colifilt(x, ha, hb, padding_mode):
+def colifilt(x, ha, hb):
     m = ha.shape[-1]
     m2 = m // 2
     hao = ha[:,:,1::2]
@@ -32,7 +32,7 @@ def colifilt(x, ha, hb, padding_mode):
     hbe = hb[:,:,::2]
     batch, ch, T = x.shape
     assert T % 2 == 0
-    x = pad_(x, hao, padding_mode, False)
+    x = pad_(x, hao, False)
 
     if m2 % 2 == 0:
         h1 = hae

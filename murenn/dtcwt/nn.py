@@ -13,10 +13,8 @@ class MuReNNDirect(torch.nn.Module):
         T (int): The Conv1d kernel size.
         in_channels (int): Number of channels in the input signal.
         J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J-1.
-        padding_mode (str): One of 'symmetric' (default), 'zeros', 'replicate',
-            and 'circular'. Padding scheme for the DTCWT decomposition.
     """
-    def __init__(self, *, J, Q, T, in_channels, J_phi=None, padding_mode="symmetric"):
+    def __init__(self, *, J, Q, T, in_channels, J_phi=None):
         super().__init__()
         if isinstance(Q, int):
             self.Q = [Q for j in range(J)]
@@ -31,13 +29,9 @@ class MuReNNDirect(torch.nn.Module):
             raise ValueError("J_phi must be greater or equal to J-1")
         self.T = T
         self.in_channels = in_channels
-        self.padding_mode = padding_mode
         down = []
         conv1d = []
-        self.dtcwt = murenn.DTCWT(
-            J=J,
-            padding_mode=padding_mode,
-        )
+        self.dtcwt = murenn.DTCWT(J=J)
 
         for j in range(J):
             conv1d_j = torch.nn.Conv1d(
