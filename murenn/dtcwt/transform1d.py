@@ -16,7 +16,6 @@ class DTCWT(torch.nn.Module):
         J=8,
         skip_hps=False,
         include_scale=False,
-        alternate_gh=False,
         padding_mode="symmetric",
         normalize=True,
     ):
@@ -24,7 +23,6 @@ class DTCWT(torch.nn.Module):
         self.level1 = level1
         self.qshift = qshift
         self.J = J
-        self.alternate_gh = alternate_gh
         self.normalize = normalize
 
         # Parse the "skip_hps" argument for skipping finest scales.
@@ -99,9 +97,6 @@ class DTCWTDirect(DTCWT):
             [False, True, True], the forward call will return the second and
             third lowpass outputs, but discard the lowpass from the first level
             transform.
-        alternate_gh (bool): If True (default), alternates between filter pairs
-            (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
-            Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
         padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate',
             and 'circular'. Padding scheme for the filters.
         normalize (bool): If True (default), the output will be normalized by a
@@ -148,11 +143,7 @@ class DTCWTDirect(DTCWT):
         ## LEVEL 2 AND GREATER ##
         # Apply multiresolution pyramid by looping over j from fine to coarse
         for j in range(1, self.J):
-            if (j % 2 == 1) and self.alternate_gh:
-                # Pick the dual filters g0a, g1a, etc. instead of h0a, h1a, etc.
-                h0a, h1a, h0b, h1b = self.g0a, self.g1a, self.g0b, self.g1b
-            else:
-                h0a, h1a, h0b, h1b = self.h0a, self.h1a, self.h0b, self.h1b
+            h0a, h1a, h0b, h1b = self.h0a, self.h1a, self.h0b, self.h1b
 
             # Ensure the lowpass is divisible by 4
             if x_phi.shape[-1] % 4 != 0:
@@ -168,11 +159,6 @@ class DTCWTDirect(DTCWT):
                 self.skip_hps[j],
                 self.padding_mode,
             )
-            if (j % 2 == 1) and self.alternate_gh:
-                # The result is anti-analytic in the Hilbert sense.
-                # We conjugate the result to bring the spectrum back to (0, pi).
-                # This is purely by convention and for consistency through j.
-                x_psi_i = -1 * x_psi_i
             x_psis.append(x_psi_r + 1j * x_psi_i)
 
             if self.include_scale[j]:
@@ -201,7 +187,6 @@ class DTCWTDirect(DTCWT):
 
         idtcwt = DTCWTInverse(
             J = self.J, 
-            alternate_gh=self.alternate_gh, 
         )
         # Compute the DTCWT of the impulse signal
         x_phi, x_psis = self(x)
@@ -275,9 +260,6 @@ class DTCWTInverse(DTCWT):
             [False, True, True], the forward call will return the second and
             third lowpass outputs, but discard the lowpass from the first level
             transform.
-        alternate_gh (bool): If True (default), alternates between filter pairs
-            (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
-            Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
         normalize (bool): If True (default), the output will be normalized by a
             factor of 1/sqrt(2)
     """
@@ -289,7 +271,6 @@ class DTCWTInverse(DTCWT):
         J=8,
         skip_hps=False,
         include_scale=False,
-        alternate_gh=False,
         padding_mode="symmetric",
         normalize=True,
         length=None,
@@ -304,7 +285,6 @@ class DTCWTInverse(DTCWT):
             J=J,
             skip_hps=skip_hps,
             include_scale=include_scale,
-            alternate_gh=alternate_gh,
             padding_mode=padding_mode,
             normalize=normalize,
         )
@@ -344,11 +324,7 @@ class DTCWTInverse(DTCWT):
                 x_psi.shape[-1] * 2 == x_phi.shape[-1]
             ), f"J={j}\n{x_psi.shape[-1]*2}\n{x_phi.shape[-1]}"
 
-            if (j % 2 == 1) and self.alternate_gh:
-                x_psi.imag = -1 * x_psi.imag
-                g0a, g1a, g0b, g1b = self.h0a, self.h1a, self.h0b, self.h1b
-            else:
-                g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b
+            g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b
 
             x_psi_r, x_psi_i = x_psi.real, x_psi.imag
             x_phi = INV_J2PLUS.apply(

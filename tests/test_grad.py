@@ -90,16 +90,15 @@ def test_inv_j2():
     gradcheck(tf.INV_J2PLUS.apply, input, eps=eps, atol=atol)
 
 
-@pytest.mark.parametrize("alternate_gh", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
-def test_autograd(alternate_gh, normalize):
+def test_autograd(normalize):
     b = 2
     ch = 3
     N = 2**5
     x = torch.zeros(b, ch, N, requires_grad=True)
 
     J = 2
-    kwargs = dict(J=J, alternate_gh=alternate_gh, normalize=normalize)
+    kwargs = dict(J=J, normalize=normalize)
     dtcwt = murenn.DTCWT(**kwargs)
     idtcwt = murenn.IDTCWT(**kwargs)
 

@@ -104,7 +104,7 @@ class MuReNNDirect(torch.nn.Module):
         x = torch.zeros(1, self.in_channels, N).to(device)
 
         # Initialize the inverse DTCWT
-        inv = murenn.IDTCWT(J=J, alternate_gh=False).to(device)
+        inv = murenn.IDTCWT(J=J).to(device)
 
         # Obtain two dual-tree response of the zero signal
         phi, psis = self.dtcwt(x)

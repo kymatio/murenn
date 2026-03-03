@@ -13,7 +13,6 @@ def test_fwd_same(J):
     Xt = torch.tensor(X, dtype=torch.get_default_dtype()).view(1, 1, 44100)
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
-        alternate_gh=False,
         include_scale=False,
         padding_mode="symmetric",
         normalize=False,
@@ -36,17 +35,15 @@ def test_fwd_same(J):
     "qshift", ["qshift_06", "qshift_a", "qshift_b", "qshift_c", "qshift_d"]
 )
 @pytest.mark.parametrize("level1", ["antonini", "legall", "near_sym_a", "near_sym_b"])
-@pytest.mark.parametrize("alternate_gh", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("J", list(range(1, 5)))
 @pytest.mark.parametrize("T", [44099, 44100])
-def test_pr(level1, qshift, J, T, alternate_gh, normalize):
+def test_pr(level1, qshift, J, T, normalize):
     Xt = torch.randn(2, 2, T)
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
         level1=level1,
         qshift=qshift,
-        alternate_gh=alternate_gh,
         include_scale=False,
         padding_mode="symmetric",
         normalize=normalize,
@@ -56,7 +53,6 @@ def test_pr(level1, qshift, J, T, alternate_gh, normalize):
         J=J,
         level1=level1,
         qshift=qshift,
-        alternate_gh=alternate_gh,
         include_scale=False,
         padding_mode="symmetric",
         normalize=normalize,
@@ -82,12 +78,11 @@ def test_skip_hps(skip_hps, normalize):
 
 
 @pytest.mark.parametrize("J", range(1,4))
-@pytest.mark.parametrize("alternate_gh", [True, False])
-def test_phi(J, alternate_gh):
+def test_phi(J):
     '''
     Test the low-pass output phi doesn't diverge.
     '''
-    tfm = murenn.DTCWT(J=J, alternate_gh=alternate_gh, include_scale=True, skip_hps=True)
+    tfm = murenn.DTCWT(J=J, include_scale=True, skip_hps=True)
     N = 2**15
     x = torch.ones(1, 1, N)
     phis, _ = tfm(x)
@@ -95,13 +90,12 @@ def test_phi(J, alternate_gh):
         assert torch.allclose(phi, torch.ones(1, 1, N // 2**j))
 
 
-@pytest.mark.parametrize("alternate_gh", [True, False])
-def test_energy_preservation(alternate_gh):
+def test_energy_preservation():
     '''
     Test Parseval’s energy theorem: the energy of the input signal 
     is equal to the energy in the wavelet domain.
     '''
-    tfm = murenn.DTCWT(alternate_gh=alternate_gh, normalize=False)
+    tfm = murenn.DTCWT(normalize=False)
     N = 2**15
     x = torch.randn(1 ,1, N)
     E_x = torch.linalg.norm(x) ** 2
@@ -117,12 +111,11 @@ def test_energy_preservation(alternate_gh):
 
 
 @pytest.mark.parametrize("J", range(1, 4))
-@pytest.mark.parametrize("alternate_gh", [True, False])
-def test_avrg_energy(J, alternate_gh):
+def test_avrg_energy(J):
     '''
     Test the power of the signals for normalization case.
     '''
-    tfm = murenn.DTCWT(J=J, alternate_gh=alternate_gh, normalize=True)
+    tfm = murenn.DTCWT(J=J, normalize=True)
     N = 2**15
     x = torch.randn(1 ,1, N)
     P_x = torch.linalg.norm(x) ** 2 / x.shape[-1]
