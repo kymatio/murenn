@@ -1,7 +1,6 @@
 import numpy as np
 import dtcwt
 import torch.nn
-import bisect
 
 from murenn.dtcwt.lowlevel import prep_filt
 
@@ -23,7 +22,7 @@ class FWD_J1(torch.nn.Module):
         x_lo = torch.nn.functional.pad(x, (padding_total_lo // 2, padding_total_lo - padding_total_lo // 2))
         padding_total_hi = h1_rep.shape[-1] - 1
         x_hi = torch.nn.functional.pad(x, (padding_total_hi // 2, padding_total_hi - padding_total_hi // 2))
-        # Shift the input signal by one sample for tree b to ensure the analycity
+        # Shift the input signal by one sample for tree b to ensure the analyticity
         x_lo_shifted = torch.roll(x_lo, -1, dims=-1)
         x_lo = torch.cat((x_lo, x_lo_shifted), dim=1)
         x_hi_shifted = torch.roll(x_hi, -1, dims=-1)
@@ -88,13 +87,11 @@ class UDTCWTDirect(torch.nn.Module):
         J=8,
         skip_hps=False,
         include_scale=False,
-        alternate_gh=False,
     ):
         super().__init__()
         self.level1 = level1
         self.qshift = qshift
         self.J = J
-        self.alternate_gh = alternate_gh
 
         # Parse the "skip_hps" argument for skipping finest scales.
         if isinstance(skip_hps, (list, tuple, np.ndarray)):
@@ -160,9 +157,10 @@ class UDTCWTDirect(torch.nn.Module):
             if x_phi.shape[-1] % 4 != 0:
                 x_phi = torch.cat((x_phi[:,:,0:1], x_phi, x_phi[:,:,-1:]), dim=-1)
             x_phi, x_psi = self.fwd_j2plus[j](x_phi,self.h0a, self.h1a, self.h0b, self.h1b)
+            x_phi = x_phi[:, :C, :]
             x_psis.append(x_psi[:, :C, :] + 1j * x_psi[:, C:2*C, :])
 
-            if self.include_scale[j]:
+            if self.include_scale[j + 1]:
                 x_phis.append(x_phi)
             else:
                 x_phis.append(x_phi.new_zeros(x_phi.shape))
@@ -173,4 +171,4 @@ class UDTCWTDirect(torch.nn.Module):
             yl, yh = x_phis, x_psis
         else:
             yl, yh = x_phi, x_psis
-        return yl[:, :C, :], yh
+        return yl, yh

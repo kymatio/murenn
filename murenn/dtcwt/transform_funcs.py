@@ -60,7 +60,7 @@ class FWD_J1(torch.autograd.Function):
             if not skip_hps:
                 dx_psi = torch.stack((dx_psi_r, dx_psi_i), dim=-1).view(b, ch, T)
                 dx += torch.nn.functional.conv1d(pad_(dx_psi, h1), h1, groups = ch)
-        return dx, None, None, None, None
+        return dx, None, None, None
 
 
 class FWD_J2PLUS(torch.autograd.Function):
@@ -186,7 +186,7 @@ class INV_J1(torch.autograd.Function):
                 dhi_r = dhi[:,:,::2]
             if ctx.needs_input_grad[2]:
                 dhi_i = dhi[:,:,1::2]
-        return dlo, dhi_r, dhi_i, None, None, None
+        return dlo, dhi_r, dhi_i, None, None
     
 
 
@@ -242,4 +242,4 @@ class INV_J2PLUS(torch.autograd.Function):
                     dbp_r = dbp[:,ch:2*ch]
                 if ctx.needs_input_grad[2]:
                     dbp_i = dbp[:,:ch]
-        return dlo, dbp_r, dbp_i, None, None, None, None, None
+        return dlo, dbp_r, dbp_i, None, None, None, None
