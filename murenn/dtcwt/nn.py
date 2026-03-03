@@ -7,6 +7,16 @@ from .utils import fix_length
 
 class MuReNNDirect(torch.nn.Module):
     """
+    Multiresolution Neural Network (MuReNN) layer based on a
+    critically-sampled dual-tree complex wavelet transform (DTCWT).
+
+    This module implements a first-order multiresolution feature extractor.
+    The input waveform is decomposed into J wavelet subbands via DTCWT. 
+    At each scale j:
+        1. A 1D convolution is applied to the wavelet coefficients.
+        2. A complex modulus nonlinearity is computed.
+        3. A scale-dependent downsampling is applied.
+    
     Args:
         J (int): Number of levels (octaves) in the DTCWT decomposition.
         Q (int or list): Number of Conv1D filters per octave.
@@ -47,7 +57,7 @@ class MuReNNDirect(torch.nn.Module):
             down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
-        self.conv1d = torch.nn.ParameterList(conv1d)
+        self.conv1d = torch.nn.ModuleList(conv1d)
 
 
     def forward(self, x):
@@ -159,6 +169,66 @@ class MuReNNDirect(torch.nn.Module):
             "real": create_conv1d(ws_r),
             "imag": create_conv1d(ws_i),
         }
+
+
+class MuReNNUndecimated(torch.nn.Module):
+    """
+    Undecimated Multiresolution Neural Network (MuReNN) layer.
+
+    This variant replaces the critically-sampled DTCWT with an
+    undecimated (stationary) DTCWT decomposition. 
+
+    Args:
+        J (int): Number of levels (octaves) in the DTCWT decomposition.
+        Q (int or list): Number of Conv1D filters per octave.
+        T (int): The Conv1d kernel size.
+        in_channels (int): Number of channels in the input signal.
+        J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J.
+    """
+    def __init__(self, *, J, Q, T, in_channels=1, J_phi=None):
+        super().__init__()
+        if isinstance(Q, int):
+            self.Q = [Q for j in range(J)]
+        elif isinstance(Q, list):
+            assert len(Q) == J
+            self.Q = Q
+        else:
+            raise TypeError(f"Q must to be int or list, got {type(Q)}")
+        if J_phi is None:
+            J_phi = J
+        if J_phi < J:
+            raise ValueError("J_phi must be greater or equal to J")
+        self.T = T
+        self.in_channels = in_channels
+        self.dtcwt = murenn.UDTCWT(J=J)
+        conv1d = []
+        for j in range(J):
+            conv1d_j = torch.nn.Conv1d(
+                in_channels=in_channels,
+                out_channels=self.Q[j],
+                kernel_size=self.T,
+                bias=False,
+                padding="same",
+                dilation=2**(j -1) if j > 0 else 1,
+            )
+            conv1d.append(conv1d_j)
+        self.conv1d = torch.nn.ModuleList(conv1d)
+        self.down = Downsampling(J_phi)
+
+    def forward(self, x):
+        assert self.in_channels == x.shape[1]
+        lp, bps = self.dtcwt(x)
+
+        u_psi_x = []
+        for j in range(self.dtcwt.J):
+            xj = bps[j]
+            Wx_j_r = self.conv1d[j](xj.real) / math.sqrt(2) ** j
+            Wx_j_i = self.conv1d[j](xj.imag) / math.sqrt(2) ** j
+            u_psi_x_j = ModulusStable.apply(Wx_j_r, Wx_j_i)
+            u_psi_x_j = self.down(u_psi_x_j)
+            u_psi_x.append(u_psi_x_j)
+        u_psi_x = torch.cat(u_psi_x, dim=1)
+        return u_psi_x
 
 
 class ModulusStable(torch.autograd.Function):
