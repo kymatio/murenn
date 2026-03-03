@@ -12,9 +12,9 @@ class MuReNNDirect(torch.nn.Module):
         Q (int or list): Number of Conv1D filters per octave.
         T (int): The Conv1d kernel size.
         in_channels (int): Number of channels in the input signal.
-        J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J-1.
+        J_phi (int): Number of levels of downsampling. Stride is 2**J_phi. Default is J.
     """
-    def __init__(self, *, J, Q, T, in_channels, J_phi=None):
+    def __init__(self, *, J, Q, T, in_channels=1, J_phi=None):
         super().__init__()
         if isinstance(Q, int):
             self.Q = [Q for j in range(J)]
@@ -24,9 +24,9 @@ class MuReNNDirect(torch.nn.Module):
         else:
             raise TypeError(f"Q must to be int or list, got {type(Q)}")
         if J_phi is None:
-            J_phi = J - 1
-        if J_phi < (J - 1):
-            raise ValueError("J_phi must be greater or equal to J-1")
+            J_phi = J
+        if J_phi < J:
+            raise ValueError("J_phi must be greater or equal to J")
         self.T = T
         self.in_channels = in_channels
         down = []
@@ -43,8 +43,7 @@ class MuReNNDirect(torch.nn.Module):
             )
             torch.nn.init.normal_(conv1d_j.weight)
             conv1d.append(conv1d_j)
-    
-            down_j = Downsampling(J_phi - j)
+            down_j = Downsampling(J_phi - j - 1)
             down.append(down_j)
 
         self.down = torch.nn.ModuleList(down)
