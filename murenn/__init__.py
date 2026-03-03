@@ -15,7 +15,9 @@ __all__ = ["DTCWT", "DTCWTDirect", "DTCWTInverse"]
 from .dtcwt.transform1d import DTCWTDirect, DTCWTInverse
 from .version import version as __version__
 from .dtcwt.nn import MuReNNDirect
+from .dtcwt.udtcwt1d import UDTCWTDirect
 
 # PytW-like aliases
 DTCWT = DTCWTDirect
 IDTCWT = DTCWTInverse
+UDTCWT = UDTCWTDirect

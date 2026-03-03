@@ -135,3 +135,18 @@ def test_default_args():
     inv = murenn.DTCWTInverse()
     X_rec = inv(lp, bp)
     torch.testing.assert_close(Xt, X_rec)
+
+
+def test_udtcwt_shape():
+    '''
+    Test that the UDT-CWT runs without error and produces outputs of the expected shape.
+    '''
+    J = 3
+    N = 2**15
+    x = torch.randn(1, 2, N)
+    tfm = murenn.UDTCWT(J=J)
+    phi, psis = tfm(x)
+    assert len(psis) == J
+    assert phi.shape == (1, 2, N)
+    for j in range(J):
+        assert psis[j].shape == (1, 2, N)

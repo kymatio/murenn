@@ -74,6 +74,27 @@ class MuReNNDirect(torch.nn.Module):
         return UWx
     
     def to_conv1d(self):
+        device = self.conv1d[0].weight.data.device
+        T = self.T  # Filter length
+        J = self.dtcwt.J  # Number of levels of decomposition
+        N = 2 ** J * max(T, self.dtcwt.g0a.shape[-1]) * 2  # Hybrid filter length
+
+        # Generate a zero signal
+        x = torch.zeros(1, self.in_channels, N).to(device)
+        x[:, :, N//2] = 1
+
+        # Initialize the inverse DTCWT
+        inv = murenn.IDTCWT(J=J).to(device)
+
+        psis = []
+        for j in range(self.dtcwt.J):
+            Wx_j_r = self.conv1d[j](bps[j].real)
+            Wx_j_i = self.conv1d[j](bps[j].imag)
+            psis.append(Wx_j_r + 1j * Wx_j_i)
+        psis = torch.cat(psis, dim=1)
+        return psis
+
+    def to_conv1d(self):
         """
         Compute the single-resolution equivalent impulse response of the MuReNN layer.
         This would be helpful for visualization in Fourier domain, for receptive fields,
