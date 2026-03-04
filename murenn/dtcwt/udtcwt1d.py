@@ -51,7 +51,7 @@ class FWD_J2PLUS(torch.nn.Module):
         self.skip_hps = skip_hps
         self.dilation = dilation
 
-    def forward(self, x, h0a, h1a, h0b, h1b, ):
+    def forward(self, x, h0a, h1a, h0b, h1b):
         b, ch, T = x.shape
         h0 = torch.cat((h0a, h0b), dim=0)
         h0_rep = h0.repeat(ch//2, 1, 1)

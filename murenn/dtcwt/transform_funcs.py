@@ -129,7 +129,7 @@ class FWD_J2PLUS(torch.autograd.Function):
             if not skip_hps:
                 dx_psi = torch.stack((dx_psi_i, dx_psi_r), dim=-1).view(b, ch, T)
                 dx += colifilt(dx_psi, g1a, g1b)
-        return dx, None, None, None, None, None, None
+        return dx, None, None, None, None, None
 
 
 class INV_J1(torch.autograd.Function):
