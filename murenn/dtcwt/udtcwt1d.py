@@ -157,18 +157,17 @@ class UDTCWTDirect(torch.nn.Module):
             if x_phi.shape[-1] % 4 != 0:
                 x_phi = torch.cat((x_phi[:,:,0:1], x_phi, x_phi[:,:,-1:]), dim=-1)
             x_phi, x_psi = self.fwd_j2plus[j](x_phi,self.h0a, self.h1a, self.h0b, self.h1b)
-            x_phi = x_phi[:, :C, :]
             x_psis.append(x_psi[:, :C, :] + 1j * x_psi[:, C:2*C, :])
 
             if self.include_scale[j + 1]:
-                x_phis.append(x_phi)
+                x_phis.append(x_phi[:, :C, :])
             else:
-                x_phis.append(x_phi.new_zeros(x_phi.shape))
+                x_phis.append(x_phi.new_zeros(B, C, T))
 
         # If at least one of the booleans in the list include_scale is True,
         # return the list x_phis as yl. Otherwise, return the last x_phi.
         if True in self.include_scale:
             yl, yh = x_phis, x_psis
         else:
-            yl, yh = x_phi, x_psis
+            yl, yh = x_phi[:, :C, :], x_psis
         return yl, yh
