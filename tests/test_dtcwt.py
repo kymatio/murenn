@@ -13,9 +13,7 @@ def test_fwd_same(J):
     Xt = torch.tensor(X, dtype=torch.get_default_dtype()).view(1, 1, 44100)
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
-        alternate_gh=False,
         include_scale=False,
-        padding_mode="symmetric",
         normalize=False,
     )
     phis, psis = xfm_murenn(Xt)
@@ -36,19 +34,16 @@ def test_fwd_same(J):
     "qshift", ["qshift_06", "qshift_a", "qshift_b", "qshift_c", "qshift_d"]
 )
 @pytest.mark.parametrize("level1", ["antonini", "legall", "near_sym_a", "near_sym_b"])
-@pytest.mark.parametrize("alternate_gh", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
 @pytest.mark.parametrize("J", list(range(1, 5)))
 @pytest.mark.parametrize("T", [44099, 44100])
-def test_pr(level1, qshift, J, T, alternate_gh, normalize):
+def test_pr(level1, qshift, J, T, normalize):
     Xt = torch.randn(2, 2, T)
     xfm_murenn = murenn.DTCWTDirect(
         J=J,
         level1=level1,
         qshift=qshift,
-        alternate_gh=alternate_gh,
         include_scale=False,
-        padding_mode="symmetric",
         normalize=normalize,
     )
     lp, bp = xfm_murenn(Xt)
@@ -56,9 +51,7 @@ def test_pr(level1, qshift, J, T, alternate_gh, normalize):
         J=J,
         level1=level1,
         qshift=qshift,
-        alternate_gh=alternate_gh,
         include_scale=False,
-        padding_mode="symmetric",
         normalize=normalize,
         length=T,
     )
@@ -82,12 +75,11 @@ def test_skip_hps(skip_hps, normalize):
 
 
 @pytest.mark.parametrize("J", range(1,4))
-@pytest.mark.parametrize("alternate_gh", [True, False])
-def test_phi(J, alternate_gh):
+def test_phi(J):
     '''
     Test the low-pass output phi doesn't diverge.
     '''
-    tfm = murenn.DTCWT(J=J, alternate_gh=alternate_gh, include_scale=True, skip_hps=True)
+    tfm = murenn.DTCWT(J=J, include_scale=True, skip_hps=True)
     N = 2**15
     x = torch.ones(1, 1, N)
     phis, _ = tfm(x)
@@ -95,13 +87,12 @@ def test_phi(J, alternate_gh):
         assert torch.allclose(phi, torch.ones(1, 1, N // 2**j))
 
 
-@pytest.mark.parametrize("alternate_gh", [True, False])
-def test_energy_preservation(alternate_gh):
+def test_energy_preservation():
     '''
     Test Parseval’s energy theorem: the energy of the input signal 
     is equal to the energy in the wavelet domain.
     '''
-    tfm = murenn.DTCWT(alternate_gh=alternate_gh, normalize=False)
+    tfm = murenn.DTCWT(normalize=False)
     N = 2**15
     x = torch.randn(1 ,1, N)
     E_x = torch.linalg.norm(x) ** 2
@@ -117,12 +108,11 @@ def test_energy_preservation(alternate_gh):
 
 
 @pytest.mark.parametrize("J", range(1, 4))
-@pytest.mark.parametrize("alternate_gh", [True, False])
-def test_avrg_energy(J, alternate_gh):
+def test_avrg_energy(J):
     '''
     Test the power of the signals for normalization case.
     '''
-    tfm = murenn.DTCWT(J=J, alternate_gh=alternate_gh, normalize=True)
+    tfm = murenn.DTCWT(J=J, normalize=True)
     N = 2**15
     x = torch.randn(1 ,1, N)
     P_x = torch.linalg.norm(x) ** 2 / x.shape[-1]
@@ -138,32 +128,6 @@ def test_avrg_energy(J, alternate_gh):
     assert torch.abs(ratio - 1) <= 0.01
 
 
-@pytest.mark.parametrize("J", list(range(1, 10)))
-def test_subbands(J):
-    tfm = murenn.DTCWT(J=J)
-    subbands = tfm.subbands
-    # Test the number of subbands
-    # There are J band-pass subbands and 1 low-pass subband, so J+2 subbands boundaries in total.
-    assert len(subbands) == J + 2
-    # Test the min/max value
-    assert min(subbands) == 0.
-    assert max(subbands) == 0.5
-    # Check that it's sorted
-    assert all(subbands[i] > subbands[i+1] for i in range(len(subbands)-1)
-    )
-
-@pytest.mark.parametrize("J", list(range(1, 10)))
-def test_hz_to_octs(J):
-    sr = 16000
-    nyquist = 8000
-    dtcwt = murenn.DTCWT(J = J)
-    # Test with a very small frequency, expecting it to map to the highest subband index
-    assert dtcwt.hz_to_octs([1e-5], sr) == [J]
-    # Test with a frequency just above the Nyquist frequency, expecting it to map to -1 (out of range)
-    assert dtcwt.hz_to_octs([nyquist+1e-5], sr) == [-1]
-    # Test with a frequency just below the Nyquist frequency, expecting it to map to the lowest subband index
-    assert dtcwt.hz_to_octs([nyquist-1e-5], sr) == [0]
-
 def test_default_args():
     Xt = torch.randn(2, 2, 16000)
     xfm_murenn = murenn.DTCWTDirect()
@@ -171,3 +135,18 @@ def test_default_args():
     inv = murenn.DTCWTInverse()
     X_rec = inv(lp, bp)
     torch.testing.assert_close(Xt, X_rec)
+
+
+def test_udtcwt_shape():
+    '''
+    Test that the UDT-CWT runs without error and produces outputs of the expected shape.
+    '''
+    J = 3
+    N = 2**15
+    x = torch.randn(1, 2, N)
+    tfm = murenn.UDTCWT(J=J)
+    phi, psis = tfm(x)
+    assert len(psis) == J
+    assert phi.shape == (1, 2, N)
+    for j in range(J):
+        assert psis[j].shape == (1, 2, N)

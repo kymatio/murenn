@@ -16,15 +16,12 @@ class DTCWT(torch.nn.Module):
         J=8,
         skip_hps=False,
         include_scale=False,
-        alternate_gh=False,
-        padding_mode="symmetric",
         normalize=True,
     ):
         super().__init__()
         self.level1 = level1
         self.qshift = qshift
         self.J = J
-        self.alternate_gh = alternate_gh
         self.normalize = normalize
 
         # Parse the "skip_hps" argument for skipping finest scales.
@@ -43,11 +40,6 @@ class DTCWT(torch.nn.Module):
             self.include_scale = [
                 include_scale,
             ] * self.J
-
-        if padding_mode == "zeros":
-            self.padding_mode = "constant"
-        else:
-            self.padding_mode = padding_mode
 
         # Load first-level biorthogonal wavelet filters from disk.
         # h0o is the low-pass filter.
@@ -99,11 +91,6 @@ class DTCWTDirect(DTCWT):
             [False, True, True], the forward call will return the second and
             third lowpass outputs, but discard the lowpass from the first level
             transform.
-        alternate_gh (bool): If True (default), alternates between filter pairs
-            (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
-            Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
-        padding_mode (str): One of 'symmetric'(default), 'zeros', 'replicate',
-            and 'circular'. Padding scheme for the filters.
         normalize (bool): If True (default), the output will be normalized by a
             factor of 1/sqrt(2)
     """
@@ -137,7 +124,7 @@ class DTCWTDirect(DTCWT):
 
         ## LEVEL 1 ##
         x_phi, x_psi_r, x_psi_i = FWD_J1.apply(
-            x, self.h0o, self.h1o, self.skip_hps[0], self.padding_mode
+            x, self.h0o, self.h1o, self.skip_hps[0]
         )
         x_psis.append(x_psi_r + 1j * x_psi_i)
         if self.include_scale[0]:
@@ -148,11 +135,7 @@ class DTCWTDirect(DTCWT):
         ## LEVEL 2 AND GREATER ##
         # Apply multiresolution pyramid by looping over j from fine to coarse
         for j in range(1, self.J):
-            if (j % 2 == 1) and self.alternate_gh:
-                # Pick the dual filters g0a, g1a, etc. instead of h0a, h1a, etc.
-                h0a, h1a, h0b, h1b = self.g0a, self.g1a, self.g0b, self.g1b
-            else:
-                h0a, h1a, h0b, h1b = self.h0a, self.h1a, self.h0b, self.h1b
+            h0a, h1a, h0b, h1b = self.h0a, self.h1a, self.h0b, self.h1b
 
             # Ensure the lowpass is divisible by 4
             if x_phi.shape[-1] % 4 != 0:
@@ -166,13 +149,7 @@ class DTCWTDirect(DTCWT):
                 h0b,
                 h1b,
                 self.skip_hps[j],
-                self.padding_mode,
             )
-            if (j % 2 == 1) and self.alternate_gh:
-                # The result is anti-analytic in the Hilbert sense.
-                # We conjugate the result to bring the spectrum back to (0, pi).
-                # This is purely by convention and for consistency through j.
-                x_psi_i = -1 * x_psi_i
             x_psis.append(x_psi_r + 1j * x_psi_i)
 
             if self.include_scale[j]:
@@ -189,76 +166,9 @@ class DTCWTDirect(DTCWT):
         return yl, yh
 
 
-    @property
-    def subbands(self):
-        """
-        Return the subbands boundaries.
-        """
-
-        N = 2 ** (self.J + 4)
-        x = torch.zeros(1, 1, N)
-        x[0, 0, N//2] = 1
-
-        idtcwt = DTCWTInverse(
-            J = self.J, 
-            alternate_gh=self.alternate_gh, 
-        )
-        # Compute the DTCWT of the impulse signal
-        x_phi, x_psis = self(x)
-        ys = []
-
-        for j in range(self.J):
-            y_phi = x_phi * 0
-            y_psis = [x_psis[k] * (j==k) for k in range(self.J)]
-            y_j_hat = torch.abs(torch.fft.fft(idtcwt(y_phi, y_psis).squeeze()))
-            ys.append(y_j_hat)
-
-        lp_psis = [x_psis[k] * 0 for k in range(self.J)]
-        y_lp_hat = torch.abs(torch.fft.fft(idtcwt(x_phi, lp_psis).squeeze()))
-        ys.append(y_lp_hat)
-
-        # Stack tensors to create a 2D tensor where each row is a tensor from the list
-        ys = torch.stack(ys)[:, :N//2]
-        # Define the threshold
-        threshold = 0.2
-        # Apply the threshold
-        valid_mask = ys >= threshold
-        ys = ys * valid_mask.float()
-        # Find the subbands of each frequency
-        max_values, max_indices = torch.max(ys, dim=0)
-        # Find the boundaries of the subbands
-        boundaries = torch.where(max_indices[:-1] != max_indices[1:])[0] + 1
-        boundaries = boundaries / N
-        boundaries = torch.cat((torch.tensor([0.]), boundaries, torch.tensor([0.5]))).flip(dims=(0,))
-        return boundaries.tolist()
-    
-
-    def hz_to_octs(self, frequencies, sr=1.0):
-        """
-        Convert a list of frequencies to their corresponding octave subband indices.
-
-        Parameters:
-        frequencies (list of float): List of frequencies to convert.
-        sr (float): Sampling rate, default is 1.0.
-
-        Returns:
-        list of int: List of octave subband indices corresponding to the input frequencies
-            -1 indicates out of range.
-        """
-        subbands = [boundary * sr for boundary in self.subbands]
-        subbands.reverse()
-        js = []
-        for freq in frequencies:
-            i = bisect.bisect_left(subbands, freq)
-            j = len(subbands) - i - 1 if i > 0 else -1
-            js.append(j)
-        return js
-
-
 class DTCWTInverse(DTCWT):
     """Performs a DTCWT reconstruction of a sequence of 1-D signals. DTCWTInverse
     should be initialized in the same manner as DTCWTDirect.
-    The only supported padding mode is 'symmetric'.
 
     Args: should be the same as DTCWTDirect.
         level1 (str): One of 'antonini', 'legall', 'near_sym_a', 'near_sym_b'.
@@ -275,9 +185,6 @@ class DTCWTInverse(DTCWT):
             [False, True, True], the forward call will return the second and
             third lowpass outputs, but discard the lowpass from the first level
             transform.
-        alternate_gh (bool): If True (default), alternates between filter pairs
-            (h0, h1) and (g0, g1) depending on odd vs. even wavelet scale j.
-            Otherwise, uses (h0, h1) only. See Selesnick et al. 2005 for details.
         normalize (bool): If True (default), the output will be normalized by a
             factor of 1/sqrt(2)
     """
@@ -289,23 +196,15 @@ class DTCWTInverse(DTCWT):
         J=8,
         skip_hps=False,
         include_scale=False,
-        alternate_gh=False,
-        padding_mode="symmetric",
         normalize=True,
         length=None,
     ):
-        if padding_mode != "symmetric":
-            raise NotImplementedError(
-                'Only padding_mode="symmetric" is supported. Got: {padding_mode}'
-            )
         super().__init__(
             level1=level1,
             qshift=qshift,
             J=J,
             skip_hps=skip_hps,
             include_scale=include_scale,
-            alternate_gh=alternate_gh,
-            padding_mode=padding_mode,
             normalize=normalize,
         )
         self.length = length
@@ -344,11 +243,7 @@ class DTCWTInverse(DTCWT):
                 x_psi.shape[-1] * 2 == x_phi.shape[-1]
             ), f"J={j}\n{x_psi.shape[-1]*2}\n{x_phi.shape[-1]}"
 
-            if (j % 2 == 1) and self.alternate_gh:
-                x_psi.imag = -1 * x_psi.imag
-                g0a, g1a, g0b, g1b = self.h0a, self.h1a, self.h0b, self.h1b
-            else:
-                g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b
+            g0a, g1a, g0b, g1b = self.g0a, self.g1a, self.g0b, self.g1b
 
             x_psi_r, x_psi_i = x_psi.real, x_psi.imag
             x_phi = INV_J2PLUS.apply(
@@ -359,7 +254,6 @@ class DTCWTInverse(DTCWT):
                 g1a,
                 g0b,
                 g1b,
-                self.padding_mode,
             )
             if self.normalize:
                 x_phi = np.sqrt(2) * x_phi
@@ -371,7 +265,7 @@ class DTCWTInverse(DTCWT):
         x_psi_r, x_psi_i = x_psis[0].real, x_psis[0].imag
 
         x_phi = INV_J1.apply(
-            x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o, self.padding_mode
+            x_phi, x_psi_r, x_psi_i, self.g0o, self.g1o,
         )
         if self.length:
             x_phi = fix_length(x_phi, size=self.length)

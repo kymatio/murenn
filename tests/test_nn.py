@@ -15,9 +15,9 @@ else:
 @pytest.mark.parametrize("J", list(range(2, 4)))
 @pytest.mark.parametrize("Q", [3, 4])
 @pytest.mark.parametrize("T", [8, 16])
-@pytest.mark.parametrize("padding_mode", ["symmetric", "zeros"])
 @pytest.mark.parametrize("N", list(range(10)))
-def test_direct_shape(J, Q, T, N, padding_mode):
+@pytest.mark.parametrize("undecimated", [False, True])
+def test_direct_shape(J, Q, T, N, undecimated):
     B, C, L = 2, 3, 2**J+N
     x = torch.zeros(B, C, L)
     graph = murenn.MuReNNDirect(
@@ -25,7 +25,7 @@ def test_direct_shape(J, Q, T, N, padding_mode):
         Q=Q,
         T=T,
         in_channels=C,
-        padding_mode=padding_mode,
+        undecimated=undecimated,
     )
     y = graph(x)
     assert y.shape[:2] == (B, Q*J)
@@ -50,7 +50,8 @@ def test_direct_diff():
 @pytest.mark.parametrize("Q", [3, 4])
 @pytest.mark.parametrize("T", [8, 16])
 @pytest.mark.parametrize("N", list(range(5)))
-def test_multi_layers(Q, T, N):
+@pytest.mark.parametrize("undecimated", [False, True])
+def test_multi_layers(Q, T, N, undecimated):
     J = 2
     B, C, L = 2, 3, 2**J+N
     x = torch.zeros(B, C, L)
@@ -61,6 +62,7 @@ def test_multi_layers(Q, T, N):
             Q=Q,
             T=T,
             in_channels=x.shape[1],
+            undecimated=undecimated,
         )
         x = layer_i(x)
 
@@ -92,13 +94,15 @@ def test_modulus():
 
 @pytest.mark.parametrize("Q", [1, 2])
 @pytest.mark.parametrize("T", [2, 3])
-def test_toconv1d(Q, T):
+@pytest.mark.parametrize("undecimated", [False, True])
+def test_toconv1d(Q, T, undecimated):
     J = 4
     tfm = murenn.MuReNNDirect(
         J=J,
         Q=Q,
         T=T,
         in_channels=2,
+        undecimated=undecimated,
     )
     N = 2**J*16
     x = torch.zeros(1, 1, N)
